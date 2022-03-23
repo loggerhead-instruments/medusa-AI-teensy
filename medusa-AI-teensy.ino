@@ -485,6 +485,7 @@ void setup() {
   display.println("Medusa AI");
   #ifdef IRIDIUM_MODEM
     display.println("Initialize modem");
+    digitalWrite(POW_5V, HIGH); // turn on Iridium power (also turns on Pi)
   #endif
   display.setCursor(0,30);
   display.print("Lat: ");
@@ -505,6 +506,7 @@ void setup() {
     }
   #endif
   delay(5000);
+  digitalWrite(POW_5V, LOW); 
   if(sdGood) logFileHeader();
   setSyncProvider(getTeensy3Time); //use Teensy RTC to keep time
   
@@ -1333,59 +1335,6 @@ float readVoltage(){
 
 void sensorInit(){
   Serial.println("Sensor Init");
-  // IMU
-  if(imuFlag){
-    mpuInit(1);
-
-    int i = 0;
-    while(i<5){
-      readImu();
-      calcImu();
-      euler();
-      i++;
-      Serial.print("a/g/m/t:\t");
-      Serial.print(accel_x); Serial.print("\t");
-      Serial.print(accel_y); Serial.print("\t");
-      Serial.print(accel_z); Serial.print("\t");
-      Serial.print(gyro_x); Serial.print("\t");
-      Serial.print(gyro_y); Serial.print("\t");
-      Serial.print(gyro_z); Serial.print("\t");
-      Serial.print(mag_x); Serial.print("\t");
-      Serial.print(mag_y); Serial.print("\t");
-      Serial.print(mag_z); Serial.print("\t");
-      Serial.println(gyro_temp);
-
-      cDisplay();
-      display.println("IMU");
-      if(i<7){
-        display.print("A:");
-        display.print( accel_x); display.print(" ");
-        display.print( accel_y); display.print(" ");
-        display.println( accel_z); 
-        display.print("G:");
-        display.print(gyro_x); display.print(" ");
-        display.print(gyro_y); display.print(" ");
-        display.println(gyro_z); 
-        display.print("M:");
-        display.print(mag_x); display.print(" ");
-        display.print(mag_y); display.print(" ");
-        display.print(mag_z); display.print(" ");
-      }
-      else{
-        display.print("P: ");
-        display.println(pitch);
-        display.print("R: ");
-        display.println(roll);
-        display.print("Y: ");
-        display.print(yaw);
-      }
-      display.display();
-      delay(200);
-      }
-  }
-  else{
-    mpuInit(0);
-  }
   cDisplay();
   display.display();
 }
