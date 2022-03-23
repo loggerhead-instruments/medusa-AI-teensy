@@ -55,8 +55,8 @@
 #define PI_PROCESSING
 
 int runMode = 1; // 0 = dev mode (power on Pi and give microSD access); 1 = deployment mode
-boolean sendIridium = 1;
-boolean useGPS = 1;
+boolean sendIridium = 0;
+boolean useGPS = 0;
 static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics 2=verbose
 #define I_SAMP 6   // 0 is 8 kHz; 1 is 16 kHz; 2 is 32 kHz; 3 is 44.1 kHz; 4 is 48 kHz; 5 is 96 kHz; 6 is 192 kHz
 boolean imuFlag = 1;
