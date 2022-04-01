@@ -24,7 +24,7 @@ void recoveryMode(){
     digitalWrite(gpsEnable, LOW); // turn off once have good GPS
     
     modem.begin();
-    modem.adjustSendReceiveTimeout(120);  // timeout in 120 seconds
+    modem.adjustSendReceiveTimeout(240);  // timeout in 240 seconds
 
     // create data packet and send
     dataPacket = "";
@@ -42,4 +42,3 @@ void recoveryMode(){
   }     
   resetFunc();  //restart
 }
-

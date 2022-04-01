@@ -244,7 +244,8 @@ int sendDataPacket(){
     if(introPeriod){
       cDisplay();
       display.println("");
-      display.println("Send fail");
+      display.print("Send fail: ");
+      display.println(err);
       display.display();
     }
 

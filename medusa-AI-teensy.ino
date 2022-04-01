@@ -521,7 +521,7 @@ void setup() {
       display.display();
       
       // send test message
-      modem.adjustSendReceiveTimeout(120);  // timeout in 120 seconds
+      modem.adjustSendReceiveTimeout(300);  // timeout in 120 seconds
   
       // create data packet and send
       dataPacket = "";
