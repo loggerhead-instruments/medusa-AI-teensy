@@ -28,7 +28,22 @@
 // Yellow: LEFT
 // Green: RIGHT
 
-#define codeVersion 20220311
+
+// Iridium ISU module needs to be configured for 3-wire (UART) operation
+// Baud 19200
+// Configuration is done using serial connection (e.g. FTDI board)
+// Connections: TX-TX, RX-RX, DTR-DTR, CTS-CTS, GND-SG (signal ground)
+// Can use Rockblock board with their USB cable and Serial Monitor of Arduino IDE set to Carriage return
+
+// AT&D0   (ignore DTR)
+// AT&K0   (ignore CTS)
+// AT&W0   (store active configuration to memory)
+// AT&Y0   (designate as default reset profile)
+
+// Commands must have a carriage return \r, not a line feed
+// "AT\r"
+
+#define codeVersion 20220401
 #define MQ 100 // to be used with LHI record queue (modified local version)
 
 #include "input_i2s.h"
@@ -55,8 +70,8 @@
 #define PI_PROCESSING
 
 int runMode = 1; // 0 = dev mode (power on Pi and give microSD access); 1 = deployment mode
-boolean sendIridium = 0;
-boolean useGPS = 0;
+boolean sendIridium = 1;
+boolean useGPS = 1;
 static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics 2=verbose
 #define I_SAMP 6   // 0 is 8 kHz; 1 is 16 kHz; 2 is 32 kHz; 3 is 44.1 kHz; 4 is 48 kHz; 5 is 96 kHz; 6 is 192 kHz
 boolean imuFlag = 1;
@@ -483,10 +498,10 @@ void setup() {
 
   cDisplay();
   display.println("Medusa AI");
-  #ifdef IRIDIUM_MODEM
-    display.println("Initialize modem");
-    digitalWrite(POW_5V, HIGH); // turn on Iridium power (also turns on Pi)
-  #endif
+//  #ifdef IRIDIUM_MODEM
+//    display.println("Initialize modem");
+//    digitalWrite(POW_5V, HIGH); // turn on Iridium power (also turns on Pi)
+//  #endif
   display.setCursor(0,30);
   display.print("Lat: ");
   display.println(latitude);
@@ -497,11 +512,30 @@ void setup() {
   #ifdef IRIDIUM_MODEM
     if(sendIridium){
       Serial1.begin(19200, SERIAL_8N1);  //Iridium
-      modem.setPowerProfile(IridiumSBD::DEFAULT_POWER_PROFILE);
+      delay(1000);
       int result = modem.begin();
+      modem.setPowerProfile(IridiumSBD::DEFAULT_POWER_PROFILE);
+      modem.getSignalQuality(sigStrength); // update Iridium modem strength
+      cDisplay();
       display.print("Iridium:"); display.println(result);
       display.display();
-      modem.getSignalQuality(sigStrength); // update Iridium modem strength
+      
+      // send test message
+      modem.adjustSendReceiveTimeout(120);  // timeout in 120 seconds
+  
+      // create data packet and send
+      dataPacket = "";
+      dataPacket += "TM:";
+      dataPacket += goodGPS;
+      dataPacket += ";";
+      dataPacket += getTeensy3Time();
+      dataPacket += ";";
+      dataPacket += String(latitude, 4);
+      dataPacket += ";";
+      dataPacket += String(longitude, 4);
+      display.println(dataPacket);
+      display.display();
+      sendDataPacket();  //blocking call
       modem.sleep();
     }
   #endif
