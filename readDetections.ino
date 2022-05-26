@@ -3,23 +3,16 @@
 
 boolean readDetections()
 {
-  #if USE_SDFS==1
-    FsFile file;
-  #else
-    File file;
-  #endif
+   FsFile detFile;
 
-  sd.chdir(); // only to be sure to star from root
-  file=sd.open("detections.txt");
-  if(file)
+  if(detFile.open("detections.txt"))
   {
-    int n = file.fgets(piPayload, sizeof(piPayload));
+    int n = detFile.fgets(piPayload, sizeof(piPayload));
     if(n<=0){
-      file.close();
+      detFile.close();
       return 0;
     }
-    file.close();  
-    
+    detFile.close();  
   }
   else return 0;
   Serial.print("Detections:");

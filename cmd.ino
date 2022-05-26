@@ -172,7 +172,7 @@ boolean LoadScript()
   short i;
   int j = 0;
 
-  File file;
+  FsFile file;
   unsigned long TM_byte;
   int comment_TM = 0;
 

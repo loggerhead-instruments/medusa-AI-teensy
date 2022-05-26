@@ -11,6 +11,7 @@
 
 // To Do:
 // - add accelerometer support
+// - check can read detections with exFat
 // - check failure scenarios
 // -     pi doesn't boot
 // -     sd doesn't connect
@@ -43,7 +44,7 @@
 // Commands must have a carriage return \r, not a line feed
 // "AT\r"
 
-#define codeVersion 20220509
+#define codeVersion 20220526
 #define MQ 100 // to be used with LHI record queue (modified local version)
 
 #include "input_i2s.h"
@@ -266,9 +267,44 @@ SnoozeAlarm alarm;
 SnoozeAudio snooze_audio;
 SnoozeBlock config_teensy32(snooze_audio, alarm);
 
-// The file where data is recorded
-File frec;
+// SD_FAT_TYPE = 0 for SdFat/File as defined in SdFatConfig.h,
+// 1 for FAT16/FAT32, 2 for exFAT, 3 for FAT16/FAT32 and exFAT.
+#define SD_FAT_TYPE 3
+const uint8_t SD_CS_PIN = 10;
+#define SPI_CLOCK SD_SCK_MHZ(50)
+
+// Try to select the best SD card configuration.
+#if HAS_SDIO_CLASS
+#define SD_CONFIG SdioConfig(FIFO_SDIO)
+#elif ENABLE_DEDICATED_SPI
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SPI_CLOCK)
+#else  // HAS_SDIO_CLASS
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SPI_CLOCK)
+#endif  // HAS_SDIO_CLASS
+
+// Set PRE_ALLOCATE true to pre-allocate file clusters.
+const bool PRE_ALLOCATE = true;
+
+// Set SKIP_FIRST_LATENCY true if the first read/write to the SD can
+// be avoid by writing a file header or reading the first record.
+const bool SKIP_FIRST_LATENCY = true;
+
+#if SD_FAT_TYPE == 0
 SdFat sd;
+File file;
+#elif SD_FAT_TYPE == 1
+SdFat32 sd;
+File32 file;
+#elif SD_FAT_TYPE == 2
+SdExFat sd;
+ExFile file;
+#elif SD_FAT_TYPE == 3
+SdFs sd;
+FsFile file;
+#else  // SD_FAT_TYPE
+#error Invalid SD_FAT_TYPE
+#endif  // SD_FAT_TYPE
+
 float recDays;
 boolean sdGood = 1;
 
@@ -610,7 +646,7 @@ void loop() {
       delay(10);
       Snooze.sleep(config_teensy32);
       delay(5000); // give time for Swarm to wake up
-      if(File logFile = sd.open("LOG.CSV",  O_CREAT | O_APPEND | O_WRITE)){
+      if(FsFile logFile = sd.open("LOG.CSV",  O_CREAT | O_APPEND | O_WRITE)){
         logFile.print('low power sleep');
         logFile.print(',');
         logFile.print(codeVersion);
@@ -958,7 +994,7 @@ void continueRecording() {
       }
       sumOfSquaresCount += 256;
       
-      if(sdGood) frec.write(sampleBuffer, 512); //audio to .wav file
+      if(sdGood) file.write(sampleBuffer, 512); //audio to .wav file
     }
 }
 
@@ -987,7 +1023,7 @@ void stopRecording() {
   #endif
 
   AudioMemoryUsageMaxReset();
-  if(sdGood) frec.close();
+  if(sdGood) file.close();
   delay(100);
 }
 
@@ -1051,15 +1087,15 @@ void setupDataStructures(void){
 }
 
 void logFileHeader(){
-  if(File logFile = sd.open("LOG.CSV",  O_CREAT | O_APPEND | O_WRITE)){
-      logFile.println("filename,ID,version,gain (dB),Voltage,Latitude,Longitude,GPS status");
-      logFile.close();
+  if(file.open("LOG.CSV",  O_CREAT | O_APPEND | O_WRITE)){
+      file.println("filename,ID,version,gain (dB),Voltage,Latitude,Longitude,GPS status");
+      file.close();
   }
 
   if(imuFlag){
-      if(File sensorFile = sd.open("IMU.csv",  O_CREAT | O_APPEND | O_WRITE)){
-      sensorFile.println("date,seconds,accel_x (g),accel_y (g),accel_z (g),gyro_x (deg/s),gyro_y (deg/s),gyro_z (deg/s),mag_x (uT),mag_y (uT),mag_z (uT)");
-      sensorFile.close();
+      if(file.open("IMU.csv",  O_CREAT | O_APPEND | O_WRITE)){
+      file.println("date,seconds,accel_x (g),accel_y (g),accel_z (g),gyro_x (deg/s),gyro_y (deg/s),gyro_z (deg/s),mag_x (uT),mag_y (uT),mag_z (uT)");
+      file.close();
     } 
   }
 
@@ -1070,7 +1106,7 @@ void writeSensors(){
   // IMU sensors
   offsetTime = 0.0;
   samplePeriod = 1.0 / imu_srate;
-  if(File sensorFile = sd.open("IMU.csv",  O_CREAT | O_APPEND | O_WRITE)){
+  if(FsFile sensorFile = sd.open("IMU.csv",  O_CREAT | O_APPEND | O_WRITE)){
       //sensorFile.println("date,seconds,accel_x,accel_y,accel_z,mag_x,mag_y,mag_z,gyro_x,gyro_y,gyro_z");
       for(int i=0; i<IMUBUFFERSIZE-1; i+=9){
         sensorFile.print(sensorStartTime);
@@ -1130,86 +1166,75 @@ void FileInit()
    // open file 
    sprintf(filename,"%04d%02d%02dT%02d%02d%02d.wav", year(t), month(t), day(t), hour(t), minute(t), second(t));  //filename is YYYYMMDDTHHMMSS
 
-   // log file
-   SdFile::dateTimeCallback(file_date_time);
+  #if USE_SDFS==1
+    FsDateTime::callback = file_date_time;
+  #else
+    SdFile::dateTimeCallback(file_date_time);
+  #endif
 
    voltage = readVoltage();
    
-   if(File logFile = sd.open("LOG.CSV",  O_CREAT | O_APPEND | O_WRITE)){
-      logFile.print(filename);
-      logFile.print(',');
+   if(file.open("LOG.CSV",  O_CREAT | O_APPEND | O_WRITE)){
+      file.print(filename);
+      file.print(',');
       for(int n=0; n<8; n++){
-        logFile.print(myID[n]);
+        file.print(myID[n]);
       }
 
-      logFile.print(',');
-      logFile.print(codeVersion);
+      file.print(',');
+      file.print(codeVersion);
       
-      logFile.print(',');
-      logFile.print(gainDb); 
+      file.print(',');
+      file.print(gainDb); 
       
-      logFile.print(',');
-      logFile.print(voltage); 
+      file.print(',');
+      file.print(voltage); 
       
-      logFile.print(',');
-      logFile.print(latitude, 4);
+      file.print(',');
+      file.print(latitude, 4);
 
-      logFile.print(',');
-      logFile.print(longitude, 4);
+      file.print(',');
+      file.print(longitude, 4);
 
-      logFile.print(',');
-      logFile.print(goodGPS);
+      file.print(',');
+      file.print(goodGPS);
       
-      logFile.println();
+      file.println();
       
 //      if(voltage < 3.0){
-//        logFile.println("Stopping because Voltage less than 3.0 V");
-//        logFile.close();  
+//        file.println("Stopping because Voltage less than 3.0 V");
+//        file.close();  
 //        // low voltage hang but keep checking voltage
 //        while(readVoltage() < 3.0){
 //            delay(30000);
 //        }
 //      }
-      logFile.close();
+      file.close();
    }
    else{
     if(printDiags) Serial.print("Log open fail.");
    }
     
-   frec = sd.open(filename, O_WRITE | O_CREAT | O_EXCL);
+   while (!file.open(filename, O_WRITE | O_CREAT | O_EXCL)){
+    file_count += 1;
+    sprintf(filename,"F%06d.wav",file_count); //if can't open just use count
+    sd.chdir(dirname);
+    file.open(filename, O_WRITE | O_CREAT | O_EXCL);
+    Serial.println(filename);
+    delay(10);
+    if(file_count>20) {
+      sdGood = 0; // give up on trying to open file for writing
+      delay(1000);
+    }
+   }
 
    if(printDiags > 0){
      Serial.println(filename);
      Serial.print("Hours rec:"); Serial.println(total_hour_recorded);
      Serial.print(voltage); Serial.println("V");
    }
-
-   if (!frec){
-    file_count += 1;
-    sprintf(filename,"F%06d.wav",file_count); //if can't open just use count
-    frec = sd.open(filename, O_WRITE | O_CREAT | O_EXCL);
-    Serial.println(filename);
-   }
-   if(!frec) sdGood = 0; // give up on trying to write file
-
-//    //intialize .wav file header
-//    sprintf(wav_hdr.rId,"RIFF");
-//    wav_hdr.rLen=36;
-//    sprintf(wav_hdr.wId,"WAVE");
-//    sprintf(wav_hdr.fId,"fmt ");
-//    wav_hdr.fLen=0x10;
-//    wav_hdr.nFormatTag=1;
-//    wav_hdr.nChannels=1;
-//    wav_hdr.nSamplesPerSec=audio_srate;
-//    wav_hdr.nAvgBytesPerSec=audio_srate*2;
-//    wav_hdr.nBlockAlign=2;
-//    wav_hdr.nBitsPerSamples=16;
-//    sprintf(wav_hdr.dId,"data");
-//    wav_hdr.rLen = 36 + nbufs_per_file * 256 * 2;
-//    wav_hdr.dLen = nbufs_per_file * 256 * 2;
-
-
-    //intialize stereo .wav file header
+   
+    //intialize .wav file header
     sprintf(wav_hdr.rId,"RIFF");
     wav_hdr.rLen=36;
     sprintf(wav_hdr.wId,"WAVE");
@@ -1225,7 +1250,7 @@ void FileInit()
     wav_hdr.dLen = nbufs_per_file * 256 * 2;
     wav_hdr.rLen = 36 + wav_hdr.dLen;
   
-    frec.write((uint8_t *)&wav_hdr, 44);
+    file.write((uint8_t *)&wav_hdr, 44);
 
 
   if(printDiags > 0){
