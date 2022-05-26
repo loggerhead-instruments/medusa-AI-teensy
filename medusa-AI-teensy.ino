@@ -43,7 +43,7 @@
 // Commands must have a carriage return \r, not a line feed
 // "AT\r"
 
-#define codeVersion 20220401
+#define codeVersion 20220509
 #define MQ 100 // to be used with LHI record queue (modified local version)
 
 #include "input_i2s.h"
@@ -70,15 +70,15 @@
 #define PI_PROCESSING
 
 int runMode = 1; // 0 = dev mode (power on Pi and give microSD access); 1 = deployment mode
-boolean sendIridium = 1;
-boolean useGPS = 1;
+boolean sendIridium = 0;
+boolean useGPS = 0;
 static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics 2=verbose
 #define I_SAMP 6   // 0 is 8 kHz; 1 is 16 kHz; 2 is 32 kHz; 3 is 44.1 kHz; 4 is 48 kHz; 5 is 96 kHz; 6 is 192 kHz
-boolean imuFlag = 1;
+boolean imuFlag = 0;
 int moduloSeconds = 10; // round to nearest start time
 #define SENDBINARY 1 // send Iridium message as binary; set to 1
-float hydroCalLeft = -180;
-float hydroCalRight = -180;
+float hydroCalLeft = -170;
+float hydroCalRight = -170;
 #define FFT1024 1024
 //#define FFT256 256
 #define NBANDS 25  // number of frequency bands to calculate and send. MAX = 25
@@ -521,7 +521,8 @@ void setup() {
       display.display();
       
       // send test message
-      modem.adjustSendReceiveTimeout(300);  // timeout in 120 seconds
+      resetWdt();
+      modem.adjustSendReceiveTimeout(400);  // timeout in 400 seconds
   
       // create data packet and send
       dataPacket = "";
