@@ -66,11 +66,11 @@
 // 
 // Dev settings
 //
-#define IRIDIUM_MODEM
-// #define SWARM_MODEM
+//#define IRIDIUM_MODEM
+#define SWARM_MODEM
 #define PI_PROCESSING
 
-int runMode = 1; // 0 = dev mode (power on Pi and give microSD access); 1 = deployment mode
+int runMode = 0; // 0 = dev mode (power on Pi and give microSD access); 1 = deployment mode
 boolean sendIridium = 0;
 boolean useGPS = 0;
 static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics 2=verbose
@@ -398,6 +398,7 @@ int nBins[NBANDS]; // number of FFT bins in each band
 volatile unsigned int whistleCount = 0;
 
 String dataPacket; // data packed for transmission after each file
+float rssi = 0;
 
 void setup() {
   setupWdt();
@@ -464,7 +465,23 @@ void setup() {
     digitalWrite(SD_POW, HIGH); // power on microSD
     display.println("Pi Dev Mode");
     display.display();
-    while(1);
+    
+    while(1){
+      resetWdt();
+      int piStatus = analogRead(PI_STATUS);
+      int piStatus2 = analogRead(PI_STATUS2);
+      cDisplay();
+      display.println("Dev Mode");
+      display.println();
+      display.print("Coral GPIO39: "); display.println(piStatus);
+      display.println("High while powered on");
+      display.println();
+      display.print("Coral GPIO38: "); display.println(piStatus2);
+      display.println("High while processing");
+      
+      display.display();
+      delay(500);
+    }
     
   }
 
