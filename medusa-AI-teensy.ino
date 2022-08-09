@@ -10,6 +10,7 @@
 // Compile 96 MHz Fastest
 
 // To Do:
+// - sleep Tile
 // - add internal temperature support
 // - check can read detections with exFat
 // - check failure scenarios
@@ -79,7 +80,7 @@ int runMode = 1; // 0 = dev mode (power on Coral and give microSD access); 1 = d
 boolean sendSatellite = 1;  // default = 1. Can be changed with setup.txt
 boolean useGPS = 1; // default = 1. Can be changed with setup.txt
 static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics 2=verbose. Can be changed with setup.txt
-int moduloSeconds = 10; // round to nearest start time
+int moduloSeconds = 60; // round to nearest start time
 int messageFormat = 0;  // 0=text, 1=binary. Can be changed with setup.txt.
 float hydroCalLeft = -170;
 float hydroCalRight = -170;
@@ -88,7 +89,6 @@ float hydroCalRight = -170;
 #define NBANDS 25  // number of frequency bands to calculate and send. MAX = 25
 #define NPEAKBANDS 8 // must be same or lower than NBANDS; this is number of peak bands to send in satellite packet
 
-uint32_t nbufs_noise_stats;
 int bandLow[NBANDS] = {1,2,3,4,5,6,7,9,11,14,18,23,29,36,46,58,73,92,116,146,184,232,292,368,463}; // band low frequencies
 int bandHigh[NBANDS]= {2,3,4,5,6,7,9,11,14,18,23,29,36,46,58,73,92,116,146,184,232,292,368,463,512};
 //int bandLow[NBANDS] = {1,2,3,4,5,6,7,9,10,11,12,13,14,15,16,17,18,19,20,30,40,50,70,90,110}; // band low frequencies
@@ -632,6 +632,11 @@ void loop() {
     }
       
     if(introPeriod){
+      if(modemType==SWARM) {
+        pollTile();
+        delay(1000);
+        pollTile(); 
+      }
       cDisplay();
       displaySettings();
       displayClock(BOTTOM, t);
@@ -698,31 +703,37 @@ void loop() {
                 
         // wait for Coral to boot
         // CORAL_STATUS goes to 1000 when Python program starts
-        time_t startPiTime = getTeensy3Time();
-        t = startPiTime;
+        time_t startCoralTime = getTeensy3Time();
+        t = startCoralTime;
         int coralStatus = analogRead(CORAL_STATUS);
-        Serial.println("CORAL_STATUS "); 
-        while((t - startPiTime < coralTimeout) & (coralStatus > 200)){
+        Serial.print("CORAL Booting: "); 
+        Serial.println(coralStatus);
+        while((t - startCoralTime < coralTimeout) & (coralStatus < 200)){
           t = getTeensy3Time();
           coralStatus = analogRead(CORAL_STATUS);
           Serial.println(coralStatus);
           delay(2000);
           resetWdt();
         }
-        boolean piTimedOut = 0;
-        if (t - startPiTime > coralTimeout) piTimedOut = 1;
+        boolean coralTimedOut = 0;
+        if (t - startCoralTime > coralTimeout) coralTimedOut = 1;
         if(introPeriod){
           displayOn();
           cDisplay();
           display.println("Processing");
-          if(piTimedOut) display.println("Pi timeout");
+          if(coralTimedOut) {
+            display.println("Coral timeout");
+            if(printDiags){
+              Serial.println("Coral Timed Out");
+            }
+          }
           display.display();
         }
         
-        // wait for Pi to process and power down
-        // values will be 0-10 when Pi off
-        startPiTime = getTeensy3Time();
-        t = startPiTime;
+        // wait for Coral to process and power down
+        // values will be <200 when Coral off
+        startCoralTime = getTeensy3Time();
+        t = startCoralTime;
         Serial.println("Wait for PI to power down");
         do{
           coralStatus = analogRead(CORAL_STATUS);
@@ -730,7 +741,7 @@ void loop() {
           Serial.print("Coral Status:"); Serial.println(coralStatus);
           t = getTeensy3Time();
           resetWdt();
-        }while(((coralStatus<20) | (coralStatus>1000)) & (t - startPiTime < coralTimeout)  & (piTimedOut == 0));
+        }while((coralStatus>500) & (t - startCoralTime < coralTimeout)  & (coralTimedOut == 0));
         delay(1000);  // make sure it is shut down
         digitalWrite(POW_5V, LOW); // power off Pi   
         digitalWrite(SD_POW, LOW); // switch off power to microSD (Pi will use SD mode, so card needs to reset)
@@ -985,6 +996,14 @@ void FileInit()
     file.open(filename, O_WRITE | O_CREAT | O_EXCL);
     Serial.println(filename);
     delay(10);
+    // try to cycle power and reinit SD
+    if(file_count==4){
+      digitalWrite(SD_POW, LOW);
+      delay(1000);
+      digitalWrite(SD_POW, HIGH);
+      delay(1000);
+      sd.begin(10);
+    }
     if(file_count>20) {
       sdGood = 0; // give up on trying to open file for writing
       delay(1000);
@@ -1019,8 +1038,6 @@ void FileInit()
   if(printDiags > 0){
     Serial.print("Buffers: ");
     Serial.println(nbufs_per_file);
-    Serial.print("Analyze Bufs: ");
-    Serial.println(nbufs_noise_stats);
     Serial.print(audio_srate);
     Serial.println(" Hz");
     Serial.print("NCHAN: ");

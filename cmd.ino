@@ -73,6 +73,7 @@ int ProcCmd(char *pCmd)
       case ('R' + ('I'<<8)):
       {
         sscanf(&pCmd[3],"%d",&lv1);
+        rec_int = lv1;
         if ((coralProcessing) & (rec_int<300)) rec_int = 300;  //minimum 300s interval when doing Coral processing
         break;
       } 

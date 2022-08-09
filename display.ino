@@ -15,24 +15,25 @@ void cDisplay(){
   display.clearDisplay();
   display.setTextColor(WHITE);
   display.setTextSize(1);
-  display.setCursor(65,0);
+
   if (modemType==IRIDIUM){
+    display.setCursor(40,0);
     display.println("IRIDIUM");
     display.setCursor(90,9);
     display.print("I:");
     display.print(sigStrength);
   }
   
-  display.setCursor(90,0);
-  display.print(voltage,1);
-  display.print("V");
-
   if (modemType==SWARM){
-    display.println("SWARM");
+      display.setCursor(40,0);
+      display.println("SWARM");
     display.setCursor(90,9);
     display.print(rssi);
   }
-  display.setCursor(0,0);
+    display.setCursor(90,0);
+  display.print(voltage,1);
+  display.print("V");
+  display.setCursor(0,18);
 }
 
 void displaySettings(){
