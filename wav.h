@@ -5,7 +5,7 @@ typedef struct hdrstruct {
     char    fId[4];
     unsigned int    fLen;
     unsigned short nFormatTag;
-    unsigned short nChannels;
+    unsigned short NCHAN;
     unsigned int nSamplesPerSec;
     unsigned int nAvgBytesPerSec;
     unsigned short nBlockAlign;
@@ -13,4 +13,3 @@ typedef struct hdrstruct {
     char    dId[4];
     unsigned int    dLen;
 } HdrStruct;
-

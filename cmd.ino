@@ -17,28 +17,11 @@ int ProcCmd(char *pCmd)
   pCV = (short*)pCmd;
 
   n = strlen(pCmd);
-  if(n<2) 
-          return TRUE;
+  if(n<2) return TRUE;
 
   switch(*pCV)
   {                     
-
-  // Accelerometer full scale
-    case ('A' + ('G'<<8)):
-    {
-      sscanf(&pCmd[3],"%d",&lv1);
-      accel_scale = lv1;
-      break;
-    }
-
-  case ('I' + ('M'<<8)):
-    {
-      sscanf(&pCmd[3],"%d",&lv1);
-      imuFlag = lv1;
-      break;
-    }
-
-  // Hydrophone sensitivity if not default -180
+  // Hydrophone sensitivity if not default -170
     case ('H' + ('L'<<8)):
     {
       sscanf(&pCmd[3],"%d",&lv1);
@@ -91,7 +74,6 @@ int ProcCmd(char *pCmd)
       {
         sscanf(&pCmd[3],"%d",&lv1);
         rec_dur = lv1;
-        analyze_dur = rec_dur;
         break;
       }
       
@@ -103,16 +85,44 @@ int ProcCmd(char *pCmd)
         break;
       } 
 
-      case ('A' + ('D'<<8)):{
+      // Run Mode
+      // default runMode = 1; // 0 = dev mode (power on Coral and give microSD access); 1 = deployment mode
+      {
         sscanf(&pCmd[3],"%d",&lv1);
-        analyze_dur = lv1;
+        if((lv1>=0) & (lv1<=1)) runMode = lv1;
+        break;
+      }
+      
+      // coralProcessing flag; default = 1
+      case ('C' + ('P'<<8)):
+      {
+        sscanf(&pCmd[3],"%d",&lv1);
+        if((lv1>=0) & (lv1<=1)) coralProcessing = lv1;
         break;
       }
 
-      case ('M' + ('I'<<8)):
+      // GPS Enable; default = 1
+      case ('G' + ('E'<<8)):
       {
         sscanf(&pCmd[3],"%d",&lv1);
-        msg_int = lv1;
+        if((lv1>=0) & (lv1<=1)) useGPS = lv1;
+        break;
+      }
+
+      // satellite message format; 0=text 1=binary
+      case ('M' + ('F'<<8)):
+      {
+        sscanf(&pCmd[3],"%d",&lv1);
+        if((lv1>=0) & (lv1<=1)) messageFormat = lv1;
+        break;
+      }
+      
+      // Modem type
+      // Iridium=1  Swarm = 2
+      case ('M' + ('T'<<8)):
+      {
+        sscanf(&pCmd[3],"%d",&lv1);
+        if((lv1>0) & (lv1<3)) modemType = lv1;
         break;
       }
 
@@ -122,6 +132,7 @@ int ProcCmd(char *pCmd)
         gainSetting = lv1;
         break;
       } 
+
 
     // 0 is 8 kHz; 1 is 16 kHz; 2 is 32 kHz; 3 is 44.1 kHz; 4 is 48 kHz; 5 is 96 kHz;
       case ('H' + ('Z'<<8)):
@@ -170,7 +181,7 @@ boolean LoadScript()
   char s[30];
   char c;
   short i;
-  int j = 0;
+  // int j = 0;
 
   FsFile file;
   unsigned long TM_byte;

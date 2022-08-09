@@ -1,7 +1,5 @@
-
 // Data packet
 uint16_t dataFormat = 2;
-
 
 typedef struct __attribute__((__packed__)){
   uint16_t dataFormat;
@@ -12,8 +10,8 @@ typedef struct __attribute__((__packed__)){
   uint8_t whistles;
   uint8_t band[NBANDS][NCHAN];
   uint8_t peakBand[NPEAKBANDS][NCHAN];
-  uint8_t acceleration;
 }iridiumStruct;
+
 
 int makeSendBinaryDataPacket(){ 
   int err = 0;
@@ -36,12 +34,7 @@ int makeSendBinaryDataPacket(){
    
    u.binaryPacket.voltage = (uint8_t) (voltage * 10);
    Serial.print("V:"); Serial.println(u.binaryPacket.voltage);
-   
-
-   Serial.println("Bands.. Whistles Accel");
    u.binaryPacket.whistles = whistleCount;
-   u.binaryPacket.acceleration = (uint8_t) (sdAccelZmg / 10.0);
-
 
     // band levels
     float spectrumLevel;
@@ -84,9 +77,6 @@ int makeSendBinaryDataPacket(){
     Serial.println();
     Serial.print("w:");
     Serial.print(u.binaryPacket.whistles); Serial.print("  ");
-    Serial.print("a:");
-    Serial.println(u.binaryPacket.acceleration);
-
     Serial.print("Sum Squares:"); Serial.println(sumOfSquares);
     Serial.print("Count:"); Serial.println(sumOfSquaresCount);
     Serial.print("Pos:"); Serial.println(posPeak);
@@ -103,7 +93,7 @@ int makeSendBinaryDataPacket(){
 
     Serial.print("Data packet size: "); Serial.println(sizeof(u.binaryPacket));
     uint8_t iridiumBuffer[sizeof(u.binaryPacket)];
-    for(int i=0; i<sizeof(u.binaryPacket); i++){
+    for(uint8_t i=0; i<sizeof(u.binaryPacket); i++){
       iridiumBuffer[i] = u.b[i];
       if (u.b[i]<0x10) {Serial.print("0");} //print leading 0
       Serial.print(u.b[i], HEX);
@@ -121,7 +111,7 @@ int makeSendBinaryDataPacket(){
       display.display();
     }
     
-   if(sendIridium){
+   if(sendSatellite){
     err = modem.sendReceiveSBDBinary(iridiumBuffer, iridiumBufferSize, rxBuffer, rxBufferSize);
     if (err != ISBD_SUCCESS){
       Serial.print("sendSBDText error: ");
@@ -142,7 +132,6 @@ int makeSendBinaryDataPacket(){
       }
     }
     else{
-      
       if(introPeriod){
         cDisplay();
         display.println("");
@@ -212,16 +201,19 @@ void makeDataPacket(){
   dataPacket += "v:";
   dataPacket += String((int) (voltage * 10));
 
-  if(imuFlag) {
-    dataPacket += ";z:";
-    dataPacket += (int) (sdAccelZmg / 10.0);
+  if (coralProcessing){
+    dataPacket += ";";
+    dataPacket += String(coralPayload);
+    dataPacket.trim(); // remove /n
   }
-
-
-  dataPacket += ";w:";
-  dataPacket += whistleCount;
-
-
+  if(modemType==SWARM){
+    dataPacket += "\"";
+    uint8_t checksum = nmeaChecksum(&dataPacket[0], dataPacket.length());
+    dataPacket += "*";
+    if(checksum<17) dataPacket += "0";
+    dataPacket += String(checksum, HEX);
+    Serial.print("Swarm ");
+  }
    Serial.println(dataPacket);
 }
 
@@ -234,39 +226,45 @@ int sendDataPacket(){
     display.println(dataPacket);
     display.display();
   }
-  size_t rxBufferSize = sizeof(rxBuffer);
-  err = modem.sendReceiveSBDText(&dataPacket[0], rxBuffer, rxBufferSize);
-
-  if (err != ISBD_SUCCESS)
-  {
-    Serial.print("sendSBDText error: ");
-    Serial.println(err);
-    if(introPeriod){
-      cDisplay();
-      display.println("");
-      display.print("Send fail: ");
-      display.println(err);
-      display.display();
-    }
-
-    if (err == ISBD_SENDRECEIVE_TIMEOUT){
-      Serial.println("Send timeout");
+  if(modemType==IRIDIUM){
+    size_t rxBufferSize = sizeof(rxBuffer);
+    err = modem.sendReceiveSBDText(&dataPacket[0], rxBuffer, rxBufferSize);
+  
+    if (err != ISBD_SUCCESS)
+    {
+      Serial.print("sendSBDText error: ");
+      Serial.println(err);
       if(introPeriod){
-          display.println("Timeout");
-          display.display();
+        cDisplay();
+        display.println("");
+        display.print("Send fail: ");
+        display.println(err);
+        display.display();
+      }
+  
+      if (err == ISBD_SENDRECEIVE_TIMEOUT){
+        Serial.println("Send timeout");
+        if(introPeriod){
+            display.println("Timeout");
+            display.display();
+        }
       }
     }
-  }
-  else{
-    
-    if(introPeriod){
-      cDisplay();
-      display.println("");
-      display.println("Msg sent");
-      display.display();
+    else{
+      
+      if(introPeriod){
+        cDisplay();
+        display.println("");
+        display.println("Msg sent");
+        display.display();
+      }
+      if (rxBufferSize >0) parseMessage();
+      Serial.println("Msg Sent");
     }
-    if (rxBufferSize >0) parseMessage();
-    Serial.println("Msg Sent");
+  }
+
+  if(modemType==SWARM){
+    Serial1.println(dataPacket);
   }
 
   return err;
@@ -278,8 +276,19 @@ void parseMessage(){
   // To Do: R30,S90,M360: Record 30 s, Sleep 90 s, Send Iridium every 360 seconds
   Serial.write((char*) rxBuffer);
   if((rxBuffer[0]=='R') & (rxBuffer[1]=='M')) recoveryMode();  // Go to recovery mode
-  
 }
+
+
+uint8_t nmeaChecksum(const char *sz, size_t len){
+  size_t i = 0;
+  uint8_t cs;
+  if(sz[0]=='$') i++;
+  for(cs = 0; (i<len)&& sz[i]; i++){
+    cs ^=((uint8_t) sz[i]);
+  }
+  return cs;
+}
+
 
 void resetSignals(){
   for (int i=0; i<NBANDS; i++){

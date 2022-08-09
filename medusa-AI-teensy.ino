@@ -6,22 +6,25 @@
 // David Mann
 
 // There must be an interval between files to work properly
-
+// # channels and FFT size are #define, so will have different hex files for differen setups
 // Compile 96 MHz Fastest
 
 // To Do:
-// - add accelerometer support
+// - Tile binary message packing
+// - add internal temperature support
 // - check can read detections with exFat
 // - check failure scenarios
-// -     pi doesn't boot
+// -     coral doesn't boot
 // -     sd doesn't connect
+// - test GPS PPS
+// - EEPROM; display settings on boot
+// - add Adafruit temperature sensor
 
-// Power Consumptions
+// Power Consumption
 // Startup: 200 mA
 // Recording: 48 mA 
 // Transmit: 150-280 (timeout at 120 s)
 // Sleep: start at 5.0 mA goes down to 3.9 mA (prob supercapcitor discharging on Iridium)
-
 
 // Hydrophone connector
 // Red: Power
@@ -44,7 +47,7 @@
 // Commands must have a carriage return \r, not a line feed
 // "AT\r"
 
-#define codeVersion 20220526
+#define codeVersion 20220809
 #define MQ 100 // to be used with LHI record queue (modified local version)
 
 #include "input_i2s.h"
@@ -66,18 +69,17 @@
 // 
 // Dev settings
 //
-//#define IRIDIUM_MODEM
-#define SWARM_MODEM
-#define PI_PROCESSING
+#define IRIDIUM 1
+#define SWARM 2
+boolean coralProcessing = 1;
+int modemType = SWARM;
 
-int runMode = 0; // 0 = dev mode (power on Pi and give microSD access); 1 = deployment mode
-boolean sendIridium = 0;
-boolean useGPS = 0;
+int runMode = 1; // 0 = dev mode (power on Coral and give microSD access); 1 = deployment mode
+boolean sendSatellite = 1;
+boolean useGPS = 1;
 static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics 2=verbose
-#define I_SAMP 6   // 0 is 8 kHz; 1 is 16 kHz; 2 is 32 kHz; 3 is 44.1 kHz; 4 is 48 kHz; 5 is 96 kHz; 6 is 192 kHz
-boolean imuFlag = 0;
 int moduloSeconds = 10; // round to nearest start time
-#define SENDBINARY 1 // send Iridium message as binary; set to 1
+int messageFormat = 0;  // 0=text, 1=binary
 float hydroCalLeft = -170;
 float hydroCalRight = -170;
 #define FFT1024 1024
@@ -94,9 +96,9 @@ int bandHigh[NBANDS]= {2,3,4,5,6,7,9,11,14,18,23,29,36,46,58,73,92,116,146,184,2
 #define ONECHAN 1
 //#define TWOCHAN 2
 
-long piTimeout = 300 ; // timeout Pi processing in seconds
-boolean cardFailed = 0; // if sd card fails, skip Pi processing
-char piPayload[200];  // payload to send from Pi/Coral detector
+long coralTimeout = 300 ; // timeout Coral processing in seconds
+boolean cardFailed = 0; // if sd card fails, skip Coral processing
+char coralPayload[200];  // payload to send from Coral detector
 
 //
 // EEPROM SETTINGS -- THESE ONLY TAKE EFFECT FOR NEW MEDUSA
@@ -104,8 +106,6 @@ char piPayload[200];  // payload to send from Pi/Coral detector
 int isf = 2; // index sampling frequency
 long rec_dur = 600; // seconds
 long rec_int = 600;  // seconds Maximum = 600 s when using watchdog timer
-long msg_int = rec_dur + rec_int; // send every message
-long analyze_dur; // must be same or less than record duration; default is same as rec_dur
 int gainSetting = 4; // SG in script file
 //
 // ********************************************************************************************************//
@@ -118,6 +118,7 @@ int gainSetting = 4; // SG in script file
 #define iridiumAv 2 // High when Iridium network available 
 #define iridiumRi 3 // Ring Indicator: active low; inactive high
 #define iridiumSleep 4 // Sleep active low
+#define TILE_EN 4 // switches on power to Tile
 #define RECV_PIN 6
 #define gpsEnable 5
 
@@ -125,11 +126,12 @@ int gainSetting = 4; // SG in script file
 #define POW_5V 15
 #define SD_POW 16
 #define SD_SWITCH 17
-#define PI_STATUS A10
-#define PI_STATUS2 A11
+#define CORAL_STATUS A10
+#define CORAL_STATUS2 A11
+
 
 #define SD_TEENSY LOW
-#define SD_PI HIGH
+#define SD_CORAL HIGH
 
 AltSoftSerial gpsSerial;  // RX 20; Tx: 21
 
@@ -231,7 +233,6 @@ int noDC = 1; // 0 = freezeDC offset; 1 = remove DC offset
 int mode = 0;  // 0=stopped, 1=recording audio, 2=recprding sensors
 time_t startTime;
 time_t stopTime;
-time_t iridiumSendTime;
 time_t t;
 time_t sensorStartTime;
 time_t packetStartTime;
@@ -240,14 +241,8 @@ boolean audioFlag = 1;
 volatile boolean LEDSON = 1;
 boolean introPeriod=1;  //flag for introductory period; used for keeping LED on for a little while
 
-int update_rate = 10;  // rate (Hz) at which interrupt to read sensors
-float imu_srate = 10.0;
-
 int32_t lhi_fsamps[7] = {8000, 16000, 32000, 44100, 48000, 96000, 192000};
-
 float audio_srate;
-
-int accel_scale = 16; //full scale on accelerometer [2, 4, 8, 16] (example cmd code: AS 8)
 
 int wakeahead = 15;
 int snooze_hour;
@@ -327,47 +322,8 @@ typedef struct {
 HdrStruct wav_hdr;
 unsigned int rms;
 
-// Sensor descriptions
-#define STR_MAX 8
-#define SENSOR_MAX 5
-struct SENSOR{
-  char chipName[STR_MAX]; // name of sensor e.g. MPU9250
-  uint16_t nChan;       //number of channels used (e.g. MPU9250 might have 9 for accel, mag, and gyro)
-  uint16_t NU;
-  char name[12][STR_MAX]; //name of each channel (e.g. accelX, gyroZ). Max of 12 channels per chip.
-  char units[12][STR_MAX];// units of each channel (e.g. g, mGauss, degPerSec)
-  float cal[12];     //calibration coefficient for each channel when multiplied by this value get data in specified units
-};
-SENSOR sensor[SENSOR_MAX]; //structure to hold sensor specifications. e.g. MPU9250, MS5837
-
 unsigned char prev_dtr = 0;
-
-// IMU
-int FIFOpts;
-#define IMUBUFFERSIZE 900 // store 10 s at 10 Hz (9 axes)
-volatile int16_t imuBuffer[IMUBUFFERSIZE]; // buffer used to store IMU sensor data before writes in samples
-volatile int bufferposIMU = 0;
-volatile boolean bufferImuFull;
-volatile uint8_t imuTempBuffer[20];
-int16_t accel_x;
-int16_t accel_y;
-int16_t accel_z;
-int16_t mag_x;
-int16_t mag_y;
-int16_t mag_z;
-int16_t gyro_x;
-int16_t gyro_y;
-int16_t gyro_z;
-float gyro_temp;
-int magXoffset;
-int magYoffset;
-int magZoffset;
-float pitch, roll, yaw;
-volatile float sdAccelZmg;
-
 float voltage;
-
-IntervalTimer slaveTimer;
 
 // GPS
 #define GPS_UBLOX 1
@@ -379,7 +335,7 @@ volatile float longitude = 0.0;
 char latHem, lonHem;
 int gpsYear = 19, gpsMonth = 2, gpsDay = 4, gpsHour = 22, gpsMinute = 5, gpsSecond = 0;
 volatile int goodGPS = 0;
-long gpsTimeOutThreshold = 600000;  //milliseconds; 10 minutes
+unsigned long gpsTimeOutThreshold = 600000;  //milliseconds; 10 minutes
 
 // define bands to measure acoustic signals
 // these need to be recalculated if the sample rate changes from settings
@@ -398,7 +354,7 @@ int nBins[NBANDS]; // number of FFT bins in each band
 volatile unsigned int whistleCount = 0;
 
 String dataPacket; // data packed for transmission after each file
-float rssi = 0;
+volatile float rssi = 0;
 
 void setup() {
   setupWdt();
@@ -409,8 +365,8 @@ void setup() {
   digitalWrite(SD_POW, HIGH);
   pinMode(SD_SWITCH, OUTPUT);
   digitalWrite(SD_SWITCH, SD_TEENSY); 
-  pinMode(PI_STATUS, INPUT);
-  pinMode(PI_STATUS2, INPUT);
+  pinMode(CORAL_STATUS, INPUT);
+  pinMode(CORAL_STATUS2, INPUT);
   pinMode(hydroPowPin, OUTPUT);
   pinMode(vSense, INPUT);
   analogReference(DEFAULT); 
@@ -459,26 +415,23 @@ void setup() {
   // Check if runMode = 0 for Pi dev
   if (runMode == 0){
     digitalWrite(SD_POW, LOW); // switch off power to microSD (Pi will use SD mode, so card needs to reset)
-    digitalWrite(SD_SWITCH, SD_PI); // switch control to Pi
+    digitalWrite(SD_SWITCH, SD_CORAL); // switch control to Pi
     digitalWrite(POW_5V, HIGH); // power on Pi
     delay(1000);
     digitalWrite(SD_POW, HIGH); // power on microSD
-    display.println("Pi Dev Mode");
+    display.println("Coral Dev Mode");
     display.display();
     
     while(1){
       resetWdt();
-      int piStatus = analogRead(PI_STATUS);
-      int piStatus2 = analogRead(PI_STATUS2);
+      int coralStatus = analogRead(CORAL_STATUS);
+      // int coralStatus2 = analogRead(CORAL_STATUS2); // not used for Coral
       cDisplay();
       display.println("Dev Mode");
       display.println();
-      display.print("Coral GPIO39: "); display.println(piStatus);
+      display.print("Coral GPIO39: "); display.println(coralStatus);
       display.println("High while powered on");
       display.println();
-      display.print("Coral GPIO38: "); display.println(piStatus2);
-      display.println("High while processing");
-      
       display.display();
       delay(500);
     }
@@ -504,17 +457,13 @@ void setup() {
     delay(400);    
   }
   readEEPROM();  // read settings stored in EEPROM
-  analyze_dur = rec_dur;  
   if(sdGood) LoadScript();
-  if (msg_int < (rec_dur + rec_int)) msg_int = rec_dur + rec_int;
   writeEEPROM(); // update settings changed from script
 
   binwidth = audio_srate / fftPoints; //256 point FFT; = 172.3 Hz for 44.1kHz
   fftDurationMs = 1000.0 / binwidth;
 
   updatePowerDuration();
- 
-  sensorInit(); // initialize and test sensors; GPS and Iridium should be after this
   resetSignals();
 
   uint16_t failTimes = 0;
@@ -551,10 +500,6 @@ void setup() {
 
   cDisplay();
   display.println("Medusa AI");
-//  #ifdef IRIDIUM_MODEM
-//    display.println("Initialize modem");
-//    digitalWrite(POW_5V, HIGH); // turn on Iridium power (also turns on Pi)
-//  #endif
   display.setCursor(0,30);
   display.print("Lat: ");
   display.println(latitude);
@@ -562,8 +507,19 @@ void setup() {
   display.print(longitude);
   display.display();
 
-  #ifdef IRIDIUM_MODEM
-    if(sendIridium){
+  if(modemType==SWARM){
+    pinMode(TILE_EN, OUTPUT);
+    digitalWrite(TILE_EN, HIGH);
+    delay(1000);
+    Serial1.begin(115200, SERIAL_8N1);
+    pollTile(); // get RSSI
+    delay(1000);
+    cDisplay();
+    pollTile();
+    cDisplay();
+  }
+  if(modemType==IRIDIUM){
+    if(sendSatellite){
       Serial1.begin(19200, SERIAL_8N1);  //Iridium
       delay(1000);
       int result = modem.begin();
@@ -592,35 +548,24 @@ void setup() {
       sendDataPacket();  //blocking call
       modem.sleep();
     }
-  #endif
+  }
   delay(5000);
   digitalWrite(POW_5V, LOW); 
   if(sdGood) logFileHeader();
   setSyncProvider(getTeensy3Time); //use Teensy RTC to keep time
-  
-// ULONG newtime;
- 
   // Power down USB if not using Serial monitor
   if (printDiags==0){
     //  usbDisable();
   }
   
-  //SdFile::dateTimeCallback(file_date_time);
-
-  // if(imuFlag) mpuInit(1); // update MPU with new settings
-  setupDataStructures();
-
   t = getTeensy3Time();
   startTime = t;
   startTime -= startTime % moduloSeconds;  //modulo to nearest modulo seconds
   startTime += moduloSeconds; //move forward
   stopTime = startTime + rec_dur;  // this will be set on start of recording
-  iridiumSendTime = stopTime; // make sure send first recording
  
-
   audio_srate = lhi_fsamps[isf];
   nbufs_per_file = (long) (rec_dur * audio_srate / 256.0) * NCHAN;
-  //nbufs_noise_stats = (uint32_t) (analyze_dur * audio_srate / 256.0) * NCHAN;
   binwidth = audio_srate / fftPoints; //256 point FFT; = 172.3 Hz for 44.1kHz
   fftDurationMs = 1000.0 / binwidth;
 
@@ -664,7 +609,7 @@ void loop() {
       Snooze.sleep(config_teensy32);
       delay(5000); // give time for Swarm to wake up
       if(FsFile logFile = sd.open("LOG.CSV",  O_CREAT | O_APPEND | O_WRITE)){
-        logFile.print('low power sleep');
+        logFile.print("low power sleep");
         logFile.print(',');
         logFile.print(codeVersion);
         logFile.print(',');  
@@ -710,12 +655,9 @@ void loop() {
       printTime(stopTime);
       Serial.print("Next Start:");
       printTime(startTime);
-      Serial.print("Next Message:");
-      printTime(iridiumSendTime);
       Serial.println();
 
       displayOff();
-
       mode = 1;
       startRecording();
     }
@@ -741,38 +683,33 @@ void loop() {
       if(introPeriod) displayOn();
       digitalWrite(gpsEnable, HIGH); // turn on so GPS can get fix while processing data and recording motion
       //
-      // Process audio with Pi
+      // Process audio with Coral
       //
-      #ifdef PI_PROCESSING
+      if (coralProcessing){
         cDisplay();
         display.println("Booting");
         display.display();
-        digitalWrite(SD_SWITCH, SD_PI); // switch control to Pi
+        digitalWrite(SD_SWITCH, SD_CORAL); // switch control to Coral
         digitalWrite(SD_POW, LOW); // switch off power to microSD (Pi will use SD mode, so card needs to reset)
-        digitalWrite(POW_5V, HIGH); // power on Pi
+        digitalWrite(POW_5V, HIGH); // power on Coral
         delay(1000);
         digitalWrite(SD_POW, HIGH); // power on microSD
-  
-        // Pi pin values around 900 when booting
-        // value low 0-3
-        // value high 1014-1017
-        
-        // wait for Pi to boot
-        // PI_STATUS goes to 0-2 when Python program starts
+                
+        // wait for Coral to boot
+        // CORAL_STATUS goes to 1000 when Python program starts
         time_t startPiTime = getTeensy3Time();
         t = startPiTime;
-        int piStatus = analogRead(PI_STATUS);
-        Serial.println("PI_STATUS "); 
-        while((t - startPiTime < piTimeout) & (piStatus > 200)){
+        int coralStatus = analogRead(CORAL_STATUS);
+        Serial.println("CORAL_STATUS "); 
+        while((t - startPiTime < coralTimeout) & (coralStatus > 200)){
           t = getTeensy3Time();
-          piStatus = analogRead(PI_STATUS);
-          Serial.println(piStatus);
+          coralStatus = analogRead(CORAL_STATUS);
+          Serial.println(coralStatus);
           delay(2000);
           resetWdt();
         }
         boolean piTimedOut = 0;
-        if (t - startPiTime > piTimeout) piTimedOut = 1;
-  
+        if (t - startPiTime > coralTimeout) piTimedOut = 1;
         if(introPeriod){
           displayOn();
           cDisplay();
@@ -780,42 +717,20 @@ void loop() {
           if(piTimedOut) display.println("Pi timeout");
           display.display();
         }
-  
-        // wait for Pi to finish processing or timeout
-        // PI_STATUS2 around 1016-1017 during processing. 0-2 when done and Pi about to shut down.
-        startPiTime = getTeensy3Time();
-        t = startPiTime;
-        int piStatus2 = analogRead(PI_STATUS2);
-        Serial.println("PI_STATUS2 "); 
-        while((t - startPiTime < piTimeout) & (piStatus2 > 200) & (piTimedOut == 0)){
-          t = getTeensy3Time();
-          piStatus2 = analogRead(PI_STATUS2);
-          Serial.println(piStatus2);
-          delay(2000);
-          resetWdt();
-        }
-        if (t - startPiTime > piTimeout) piTimedOut = 1;
-  
-        if(introPeriod){
-          displayOn();
-          cDisplay();
-          display.println("Wait on Pi");
-          if(piTimedOut) display.println("Pi timeout");
-          display.display();
-        }
-  
-        // wait for Pi to power down
-        // values will be 100 when Pi off
+        
+        // wait for Pi to process and power down
+        // values will be 0-10 when Pi off
         startPiTime = getTeensy3Time();
         t = startPiTime;
         Serial.println("Wait for PI to power down");
         do{
-          piStatus = analogRead(PI_STATUS);
+          coralStatus = analogRead(CORAL_STATUS);
           delay(1000);
-          Serial.print("Pi Status:"); Serial.println(piStatus);
+          Serial.print("Coral Status:"); Serial.println(coralStatus);
           t = getTeensy3Time();
           resetWdt();
-        }while(((piStatus<20) | (piStatus>1000)) & (t - startPiTime < piTimeout)  & (piTimedOut == 0));
+        }while(((coralStatus<20) | (coralStatus>1000)) & (t - startPiTime < coralTimeout)  & (piTimedOut == 0));
+        delay(1000);  // make sure it is shut down
         digitalWrite(POW_5V, LOW); // power off Pi   
         digitalWrite(SD_POW, LOW); // switch off power to microSD (Pi will use SD mode, so card needs to reset)
         digitalWrite(SD_SWITCH, SD_TEENSY); // switch control to Teensy
@@ -824,7 +739,7 @@ void loop() {
         delay(100);
 
         int sdAttempts = 0;
-        if (!(sd.begin(10) & sdAttempts < 2000)) {
+        if (!(sd.begin(10) & (sdAttempts < 2000))) {
           digitalWrite(SD_POW, LOW);
           delay(1000);
           digitalWrite(SD_POW, HIGH);
@@ -835,31 +750,9 @@ void loop() {
   
         // read detections file
         if(!cardFailed) readDetections();
-      #endif
+      }
 
       resetWdt();
-//      // Record motion data
-//      if(imuFlag){
-//        if(introPeriod){
-//          cDisplay();
-//          display.println();
-//          display.println("IMU");
-//          display.display();
-//        }
-//        
-//         startSensors();
-//         long startImuMillis = millis();
-//          while(bufferImuFull==0){
-//             // timeout 30 s
-//             if(millis() - startImuMillis > 30000) break; 
-//          }
-//          stopSensors();
-//          writeSensors();
-//          calcSensorStats();
-//          Serial.print("Z:");
-//          Serial.println(sdAccelZmg);
-//          if (imuFlag) mpuInit(0);  //gyro to sleep
-//      }
 
       // get GPS
       if(useGPS){
@@ -881,41 +774,31 @@ void loop() {
       }
       digitalWrite(gpsEnable, LOW); // turn off once have good GPS
 
-    // IRIDIUM
-      if(sendIridium==0){
-        if(SENDBINARY==1) makeSendBinaryDataPacket();  //just so can see output for testing
-        else{
-          makeDataPacket();
-        }
-      }
-      if(sendIridium & (stopTime >= iridiumSendTime)){
+    // Satellite Message
+    if(modemType==IRIDIUM){
+      if(sendSatellite){
         if(introPeriod) {
           cDisplay();
           display.println();
           display.println("Send Iridium");
           display.display();
         }
-        iridiumSendTime = stopTime + msg_int;  // next time to send
         modem.begin();
-        if(SENDBINARY==1) makeSendBinaryDataPacket();
+        if(messageFormat==1) makeSendBinaryDataPacket();
         else{
           makeDataPacket();
           sendDataPacket();
         }
         modem.sleep();
       }
-//          if((sendIridium) & (stopTime >= iridiumSendTime)){
-//            modem.getSignalQuality(sigStrength);
-//            iridiumSendTime = stopTime + msg_int;  // next time to send
-//            modem.begin();  // wake Iridium
-//            modem.adjustSendReceiveTimeout(120);  // timeout in 120 seconds
-//            if(introPeriod) displayOn();
-//            int err = sendDataPacket(0);    
-//            modem.sleep();
-//          }
+    }
 
+    if(modemType==SWARM){
+      pollTile(); // get updated RSSI
+      
+    }
+    
       resetSignals();
-
       if(introPeriod) delay(1000); // time to read display
       displayOff();
       
@@ -959,12 +842,10 @@ void loop() {
       if(introPeriod) displayOn();
       mode = 0;
       digitalWrite(gpsEnable, HIGH); // wake up to get GPS in standby mode
-      
     }
   }
   asm("wfi"); // reduce power between interrupts
 }
-
 
 void startRecording() {
   Serial.println("startRecording");
@@ -976,7 +857,6 @@ void startRecording() {
   #endif
   Serial.println("Queue Begin");
 }
-
 
 void continueRecording() {
   byte sampleBuffer[512]; // data to write
@@ -1044,137 +924,11 @@ void stopRecording() {
   delay(100);
 }
 
-void setupDataStructures(void){
-  // setup sidSpec and sidSpec buffers...hard coded for now
-  
-  // audio
-  strncpy(sensor[0].chipName, "SGTL5000", STR_MAX);
-  sensor[0].nChan = 1;
-  strncpy(sensor[0].name[0], "audio1", STR_MAX);
-  strncpy(sensor[0].name[1], "audio2", STR_MAX);
-  strncpy(sensor[0].name[2], "audio3", STR_MAX);
-  strncpy(sensor[0].name[3], "audio4", STR_MAX);
-  strncpy(sensor[0].units[0], "Pa", STR_MAX);
-  strncpy(sensor[0].units[1], "Pa", STR_MAX);
-  strncpy(sensor[0].units[2], "Pa", STR_MAX);
-  strncpy(sensor[0].units[3], "Pa", STR_MAX);
-  sensor[0].cal[0] = gainDb + hydroCalLeft; // this needs to be set based on hydrophone sensitivity + chip gain
-  sensor[0].cal[1] = gainDb + hydroCalRight;
-  sensor[0].cal[2] = gainDb + hydroCalLeft;
-  sensor[0].cal[3] = gainDb + hydroCalLeft;
-
-  // IMU
-  strncpy(sensor[2].chipName, "MPU9250", STR_MAX);
-  sensor[2].nChan = 9;
-  strncpy(sensor[2].name[0], "accelX", STR_MAX);
-  strncpy(sensor[2].name[1], "accelY", STR_MAX);
-  strncpy(sensor[2].name[2], "accelZ", STR_MAX);
-  //strncpy(sensor[2].name[3], "temp-21C", STR_MAX);
-  strncpy(sensor[2].name[3], "gyroX", STR_MAX);
-  strncpy(sensor[2].name[4], "gyroY", STR_MAX);
-  strncpy(sensor[2].name[5], "gyroZ", STR_MAX);
-  strncpy(sensor[2].name[6], "magX", STR_MAX);
-  strncpy(sensor[2].name[7], "magY", STR_MAX);
-  strncpy(sensor[2].name[8], "magZ", STR_MAX);
-  strncpy(sensor[2].units[0], "g", STR_MAX);
-  strncpy(sensor[2].units[1], "g", STR_MAX);
-  strncpy(sensor[2].units[2], "g", STR_MAX);
-  //strncpy(sensor[2].units[3], "degreesC", STR_MAX);
-  strncpy(sensor[2].units[3], "degPerS", STR_MAX);
-  strncpy(sensor[2].units[4], "degPerS", STR_MAX);
-  strncpy(sensor[2].units[5], "degPerS", STR_MAX);
-  strncpy(sensor[2].units[6], "uT", STR_MAX);
-  strncpy(sensor[2].units[7], "uT", STR_MAX);
-  strncpy(sensor[2].units[8], "uT", STR_MAX);
-  
-  float accelFullRange = (float) accel_scale; //ACCEL_FS_SEL 2g(00), 4g(01), 8g(10), 16g(11)
-  int gyroFullRange = 1000.0;  // FS_SEL 250deg/s (0), 500 (1), 1000(2), 2000 (3)
-  int magFullRange = 4800.0;  // fixed
-  
-  sensor[2].cal[0] = accelFullRange / 32768.0;
-  sensor[2].cal[1] = accelFullRange / 32768.0;
-  sensor[2].cal[2] = accelFullRange / 32768.0;
-  //sensor[2].cal[3] = 1.0 / 337.87;
-  sensor[2].cal[3] = gyroFullRange / 32768.0;
-  sensor[2].cal[4] = gyroFullRange / 32768.0;
-  sensor[2].cal[5] = gyroFullRange / 32768.0;
-  sensor[2].cal[6] = magFullRange / 32768.0;
-  sensor[2].cal[7] = magFullRange / 32768.0;
-  sensor[2].cal[8] = magFullRange / 32768.0;
-}
-
 void logFileHeader(){
   if(file.open("LOG.CSV",  O_CREAT | O_APPEND | O_WRITE)){
       file.println("filename,ID,version,gain (dB),Voltage,Latitude,Longitude,GPS status");
       file.close();
   }
-
-  if(imuFlag){
-      if(file.open("IMU.csv",  O_CREAT | O_APPEND | O_WRITE)){
-      file.println("date,seconds,accel_x (g),accel_y (g),accel_z (g),gyro_x (deg/s),gyro_y (deg/s),gyro_z (deg/s),mag_x (uT),mag_y (uT),mag_z (uT)");
-      file.close();
-    } 
-  }
-
-}
-
-float offsetTime, samplePeriod;
-void writeSensors(){
-  // IMU sensors
-  offsetTime = 0.0;
-  samplePeriod = 1.0 / imu_srate;
-  if(FsFile sensorFile = sd.open("IMU.csv",  O_CREAT | O_APPEND | O_WRITE)){
-      //sensorFile.println("date,seconds,accel_x,accel_y,accel_z,mag_x,mag_y,mag_z,gyro_x,gyro_y,gyro_z");
-      for(int i=0; i<IMUBUFFERSIZE-1; i+=9){
-        sensorFile.print(sensorStartTime);
-        sensorFile.print(",");
-        sensorFile.print(offsetTime);
-        sensorFile.print(",");
-        sensorFile.print((float)imuBuffer[i] * sensor[2].cal[0]);
-        sensorFile.print(",");
-        sensorFile.print((float)imuBuffer[i+1] * sensor[2].cal[1]);
-        sensorFile.print(",");
-        sensorFile.print((float)imuBuffer[i+2] * sensor[2].cal[2]);
-        sensorFile.print(",");
-        sensorFile.print((float)imuBuffer[i+3] * sensor[2].cal[3]);
-        sensorFile.print(",");
-        sensorFile.print((float)imuBuffer[i+4] * sensor[2].cal[4]);
-        sensorFile.print(",");
-        sensorFile.print((float)imuBuffer[i+5] * sensor[2].cal[5]);
-        sensorFile.print(",");
-        sensorFile.print((float)imuBuffer[i+6] * sensor[2].cal[6]);
-        sensorFile.print(",");
-        sensorFile.print((float)imuBuffer[i+7] * sensor[2].cal[7]);
-        sensorFile.print(",");
-        sensorFile.print((float)imuBuffer[i+8] * sensor[2].cal[8]);
-        sensorFile.print("\n");
-        offsetTime += samplePeriod;
-      }
-      sensorFile.close();
-  }
-  else{
-    Serial.println("Can't open IMU.csv");
-  }
-}
-
-void calcSensorStats(){
-  long sumAccelZ;
-  float sumSquaresAccelZ;
-  int counter;
-
-  // mean of Z
-  for(int i=2; i<IMUBUFFERSIZE-1; i+=9){
-    sumAccelZ += imuBuffer[i];
-    counter++;
-  }
-  float meanAccelZ = sumAccelZ / counter;
-
-  // calc RMS of Z
-  for(int i=2; i<IMUBUFFERSIZE-1; i+=9){
-    sumSquaresAccelZ += ((float) imuBuffer[i] - meanAccelZ) * ((float) imuBuffer[i] - meanAccelZ);
-  }
-  sdAccelZmg = (sqrt(sumSquaresAccelZ / counter) * sensor[2].cal[2] * 1000.0); // mg
-  
 }
 
 void FileInit()
@@ -1217,15 +971,6 @@ void FileInit()
       file.print(goodGPS);
       
       file.println();
-      
-//      if(voltage < 3.0){
-//        file.println("Stopping because Voltage less than 3.0 V");
-//        file.close();  
-//        // low voltage hang but keep checking voltage
-//        while(readVoltage() < 3.0){
-//            delay(30000);
-//        }
-//      }
       file.close();
    }
    else{
@@ -1332,44 +1077,9 @@ void calcGain(){
   }
 }
 
-unsigned long processSyncMessage() {
-  unsigned long pctime = 0L;
-  const unsigned long DEFAULT_TIME = 1451606400; // Jan 1 2016
-} 
-
-void sampleSensors(void){  //interrupt at update_rate
-  readImu();
-  calcImu();
-  if(bufferImuFull==0) incrementIMU();  
-}
-
-void incrementIMU(){
-  imuBuffer[bufferposIMU] = accel_x;
-  bufferposIMU++;
-  imuBuffer[bufferposIMU] = accel_y;
-  bufferposIMU++;
-  imuBuffer[bufferposIMU] = accel_z;
-  bufferposIMU++;
-  imuBuffer[bufferposIMU] = gyro_x;
-  bufferposIMU++;
-  imuBuffer[bufferposIMU] = gyro_y;
-  bufferposIMU++;
-  imuBuffer[bufferposIMU] = gyro_z;
-  bufferposIMU++;
-  imuBuffer[bufferposIMU] = mag_x;
-  bufferposIMU++;
-  imuBuffer[bufferposIMU] = mag_y;
-  bufferposIMU++;
-  imuBuffer[bufferposIMU] = mag_z;
-  bufferposIMU++;
-
-
-  if(bufferposIMU>=IMUBUFFERSIZE) bufferImuFull = 1;
-}
 void resetFunc(void){
   CPU_RESTART
 }
-
 
 void read_EE(uint8_t word, uint8_t *buf, uint8_t offset)  {
   noInterrupts();
@@ -1387,7 +1097,6 @@ void read_EE(uint8_t word, uint8_t *buf, uint8_t offset)  {
   interrupts();
 }
 
-    
 void read_myID() {
   read_EE(0xe,myID,0); // should be 04 E9 E5 xx, this being PJRC's registered OUI
   read_EE(0xf,myID,4); // xx xx xx xx
@@ -1410,30 +1119,9 @@ float readVoltage(){
    return voltage;
 }
 
-void sensorInit(){
-  Serial.println("Sensor Init");
-  cDisplay();
-  display.display();
-}
-
 time_t getTeensy3Time()
 {
   return Teensy3Clock.get();
-}
-
-void startSensors(){
-  Serial.println("Start Sensors");
-  bufferImuFull = 0;
-  bufferposIMU = 0;
-  t = getTeensy3Time();
-  sensorStartTime = t;
-  if(imuFlag) mpuInit(1);
-  slaveTimer.begin(sampleSensors, 1000000 / update_rate); 
-  slaveTimer.priority(255);
-}
-
-void stopSensors(){
-  slaveTimer.end();
 }
 
 void setupWdt(){

@@ -16,20 +16,20 @@ void cDisplay(){
   display.setTextColor(WHITE);
   display.setTextSize(1);
   display.setCursor(65,0);
-  #ifdef IRIDIUM_MODEM
+  if (modemType==IRIDIUM){
     display.print("I:");
     display.print(sigStrength);
-  #endif
+  }
   
   display.setCursor(90,0);
   display.print(voltage,1);
   display.print("V");
 
-  #ifdef SWARM_MODEM
+  if (modemType==SWARM){
     display.setCursor(90,9);
     display.print(rssi);
-  #endif
-  
+  }
+
   display.setCursor(0,0);
 }
 
@@ -131,8 +131,8 @@ void readEEPROM(){
   if(rec_dur>3600) rec_dur = 3600;
   if(rec_int<30) rec_int = 570;
   if(rec_int>3600*24) rec_int = 60;
-  if(isf<0 | isf>5) isf=4;
-  if(gainSetting<0 | gainSetting>13) gainSetting = 4;
+  if((isf<0) | (isf>5)) isf=4;
+  if((gainSetting<0) | (gainSetting>13)) gainSetting = 4;
 }
 
 union {

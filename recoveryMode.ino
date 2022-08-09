@@ -6,7 +6,6 @@ void recoveryMode(){
   Serial.println(" Recovery");
   digitalWrite(hydroPowPin, LOW); //hydrophone off          
   audio_power_down();
-  if(imuFlag) mpuInit(0);
   displayOff();
   delay(10);
 

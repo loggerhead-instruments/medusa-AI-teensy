@@ -7,7 +7,7 @@ boolean readDetections()
 
   if(detFile.open("detections.txt"))
   {
-    int n = detFile.fgets(piPayload, sizeof(piPayload));
+    int n = detFile.fgets(coralPayload, sizeof(coralPayload));
     if(n<=0){
       detFile.close();
       return 0;
@@ -16,12 +16,12 @@ boolean readDetections()
   }
   else return 0;
   Serial.print("Detections:");
-  Serial.println(piPayload);
+  Serial.println(coralPayload);
 
   // extract whistle count
   char signalLabel[1];
   unsigned int detectionCount;
-  sscanf(piPayload, "%c:%d",signalLabel,&detectionCount);
+  sscanf(coralPayload, "%c:%d",signalLabel,&detectionCount);
   if(signalLabel[0]=='w') {
     whistleCount = detectionCount;
     Serial.print("scan whistles:");
