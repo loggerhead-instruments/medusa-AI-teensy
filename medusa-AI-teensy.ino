@@ -697,9 +697,11 @@ void loop() {
         display.display();
         digitalWrite(SD_SWITCH, SD_CORAL); // switch control to Coral
         digitalWrite(SD_POW, LOW); // switch off power to microSD (Pi will use SD mode, so card needs to reset)
-        digitalWrite(POW_5V, HIGH); // power on Coral
         delay(1000);
         digitalWrite(SD_POW, HIGH); // power on microSD
+        delay(100);
+        digitalWrite(POW_5V, HIGH); // power on Coral
+        delay(5000);
                 
         // wait for Coral to boot
         // CORAL_STATUS goes to 1000 when Python program starts
