@@ -17,6 +17,8 @@ void cDisplay(){
   display.setTextSize(1);
   display.setCursor(65,0);
   if (modemType==IRIDIUM){
+    display.println("IRIDIUM");
+    display.setCursor(90,9);
     display.print("I:");
     display.print(sigStrength);
   }
@@ -26,10 +28,10 @@ void cDisplay(){
   display.print("V");
 
   if (modemType==SWARM){
+    display.println("SWARM");
     display.setCursor(90,9);
     display.print(rssi);
   }
-
   display.setCursor(0,0);
 }
 

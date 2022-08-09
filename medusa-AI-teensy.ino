@@ -10,15 +10,16 @@
 // Compile 96 MHz Fastest
 
 // To Do:
-// - Tile binary message packing
 // - add internal temperature support
 // - check can read detections with exFat
 // - check failure scenarios
 // -     coral doesn't boot
 // -     sd doesn't connect
 // - test GPS PPS
+// - test 2 channel record
 // - EEPROM; display settings on boot
 // - add Adafruit temperature sensor
+// - Tile pack two messages together.
 
 // Power Consumption
 // Startup: 200 mA
@@ -74,12 +75,12 @@
 boolean coralProcessing = 1;
 int modemType = SWARM;
 
-int runMode = 1; // 0 = dev mode (power on Coral and give microSD access); 1 = deployment mode
-boolean sendSatellite = 1;
-boolean useGPS = 1;
-static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics 2=verbose
+int runMode = 1; // 0 = dev mode (power on Coral and give microSD access); 1 = deployment mode; can be changed with setup.txt
+boolean sendSatellite = 1;  // default = 1. Can be changed with setup.txt
+boolean useGPS = 1; // default = 1. Can be changed with setup.txt
+static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics 2=verbose. Can be changed with setup.txt
 int moduloSeconds = 10; // round to nearest start time
-int messageFormat = 0;  // 0=text, 1=binary
+int messageFormat = 0;  // 0=text, 1=binary. Can be changed with setup.txt.
 float hydroCalLeft = -170;
 float hydroCalRight = -170;
 #define FFT1024 1024
@@ -104,7 +105,7 @@ char coralPayload[200];  // payload to send from Coral detector
 // EEPROM SETTINGS -- THESE ONLY TAKE EFFECT FOR NEW MEDUSA
 //
 int isf = 2; // index sampling frequency
-long rec_dur = 600; // seconds
+long rec_dur = 1200; // seconds
 long rec_int = 600;  // seconds Maximum = 600 s when using watchdog timer
 int gainSetting = 4; // SG in script file
 //
@@ -354,7 +355,7 @@ int nBins[NBANDS]; // number of FFT bins in each band
 volatile unsigned int whistleCount = 0;
 
 String dataPacket; // data packed for transmission after each file
-volatile float rssi = 0;
+volatile int rssi = 0;
 
 void setup() {
   setupWdt();
@@ -979,7 +980,7 @@ void FileInit()
     
    while (!file.open(filename, O_WRITE | O_CREAT | O_EXCL)){
     file_count += 1;
-    sprintf(filename,"F%06d.wav",file_count); //if can't open just use count
+    sprintf(filename,"F%06ld.wav",file_count); //if can't open just use count
     sd.chdir(dirname);
     file.open(filename, O_WRITE | O_CREAT | O_EXCL);
     Serial.println(filename);

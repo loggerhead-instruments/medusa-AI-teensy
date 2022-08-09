@@ -24,19 +24,19 @@ void parseTile(byte incomingByte){
     //process last message
     if(tileStreamPos > 10){
       // extract RSSI
-      if((gpsStream[1]=='R') & (gpsStream[2]=='T')){
+      if((tileStream[1]=='R') & (tileStream[2]=='T')){
        char temp[streamPos + 1];
        // two digit values
-        if(gpsStream[12]=='*') {
-          memcpy(&temp, &gpsStream[9], 3);
+        if(tileStream[12]=='*') {
+          memcpy(&temp, &tileStream[9], 3);
           Serial.print("RSSI extracted:"); Serial.println(temp);
-          sscanf(temp, "%d", &rssi);
+          sscanf(temp, "%i", &rssi);
         }
         // three digit values
-        if(gpsStream[13]=='*'){
-          memcpy(&temp, &gpsStream[9], 4);
+        if(tileStream[13]=='*'){
+          memcpy(&temp, &tileStream[9], 4);
           Serial.print("RSSI extracted:"); Serial.println(temp);
-          sscanf(temp, "%d", &rssi);
+          sscanf(temp, "%i", &rssi);
         }
       }
     }

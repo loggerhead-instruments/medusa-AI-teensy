@@ -6,7 +6,7 @@ int ProcCmd(char *pCmd)
 {
   short *pCV;
   short n;
-  long lv1;
+  int lv1;
   unsigned int tday;
   unsigned int tmonth;
   unsigned int tyear;
@@ -35,14 +35,7 @@ int ProcCmd(char *pCmd)
       sscanf(&pCmd[3],"%d",&lv1);
       hydroCalRight = lv1;
       break;
-    }
-    // Disable LEDs
-    case ('L' + ('D'<<8)):
-    {
-      LEDSON = 0;
-      break;
-    }
-    
+    }    
 
     // Set of Real Time Clock
     case ('T' + ('M'<<8)):
