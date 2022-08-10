@@ -207,11 +207,13 @@ void makeDataPacket(){
   }
 
   // ADD CHECKSUM
-  if(modemType==SWARM) dataPacket += "\"";
-  uint8_t checksum = nmeaChecksum(&dataPacket[0], dataPacket.length());
-  dataPacket += "*";
-  if(checksum<17) dataPacket += "0";
-  dataPacket += String(checksum, HEX);
+  if(modemType==SWARM) {
+    dataPacket += "\"";
+    uint8_t checksum = nmeaChecksum(&dataPacket[0], dataPacket.length());
+    dataPacket += "*";
+    if(checksum<17) dataPacket += "0";
+    dataPacket += String(checksum, HEX);
+  }
 
   if(printDiags){
    Serial.print("length:");

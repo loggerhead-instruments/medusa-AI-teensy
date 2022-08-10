@@ -10,9 +10,6 @@
 // Compile 96 MHz Fastest
 
 // To Do:
-
-// - ASCII data packet structure
-//    - process more than one Coral packet
 // - sleep Tile
 // - add internal temperature support
 // - check Coral and Teensy can use exFat
@@ -22,8 +19,6 @@
 // - test GPS PPS
 // - test 2 channel record
 // - EEPROM; display settings on boot
-// - add Adafruit temperature sensor
-// - Tile pack two messages together.
 
 // Power Consumption
 // Startup: 200 mA
