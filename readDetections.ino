@@ -15,17 +15,17 @@ boolean readDetections()
     detFile.close();  
   }
   else return 0;
-  Serial.print("Detections:");
+  Serial.print("Coral payload:");
   Serial.println(coralPayload);
 
-  // extract whistle count
-  char signalLabel[1];
-  unsigned int detectionCount;
-  sscanf(coralPayload, "%c:%d",signalLabel,&detectionCount);
-  if(signalLabel[0]=='w') {
-    whistleCount = detectionCount;
-    Serial.print("scan whistles:");
-    Serial.println(whistleCount);
-  }
+//  // extract whistle count
+//  char signalLabel[1];
+//  unsigned int detectionCount;
+//  sscanf(coralPayload, "%c:%d",signalLabel,&detectionCount);
+//  if(signalLabel[0]=='w') {
+//    whistleCount = detectionCount;
+//    Serial.print("scan whistles:");
+//    Serial.println(whistleCount);
+//  }
  return 1;  
 }

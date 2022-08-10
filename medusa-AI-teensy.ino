@@ -742,7 +742,7 @@ void loop() {
           t = getTeensy3Time();
           resetWdt();
         }while((coralStatus>500) & (t - startCoralTime < coralTimeout)  & (coralTimedOut == 0));
-        if(coralTimedOut==0) delay(10000);  // make sure it is shut down
+        if(coralTimedOut==0) delay(12000);  // make sure it is shut down
         digitalWrite(POW_5V, LOW); // power off Coral
         digitalWrite(SD_POW, LOW); // switch off power to microSD
         digitalWrite(SD_SWITCH, SD_TEENSY); // switch control to Teensy
