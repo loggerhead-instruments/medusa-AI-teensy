@@ -4,6 +4,7 @@
 
 ### Message Limitations
 Swarm has a limit of 192 characters per message
+
 Iridium via Rockblock charges for every 50 characters. Max message 320 Bytes
 
 ### Message Format
