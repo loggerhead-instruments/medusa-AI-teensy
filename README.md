@@ -12,7 +12,7 @@ Adopt modified JSON with reserved short one character names. These names have a 
 
 Each message ends with a NEMA checksum (e.g. *67) to ensure data integrity
 
-Teensy will feed whatever string is stored by Coral in the detections.txt file into the satellite message. This will allow a user to change the Coral processing and us to create a web system to process these messages.
+Teensy will feed whatever string is stored by Coral in the detections.txt file into the satellite message. This will allow a user to change the Coral processing. The message format is designed to allow cloud processing of custom messages.
 
 Teensy will deal with message packing to fit inside of message limits. A message may contain one or more JSON blocks separated by {braces}.
 
