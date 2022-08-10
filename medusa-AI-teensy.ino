@@ -52,7 +52,7 @@
 // Commands must have a carriage return \r, not a line feed
 // "AT\r"
 
-#define codeVersion 20220809
+#define codeVersion 20220810
 #define MQ 100 // to be used with LHI record queue (modified local version)
 
 #include "input_i2s.h"
@@ -952,7 +952,7 @@ void FileInit()
    t = getTeensy3Time();
    // open file 
    fileIDcounter++;
-   sprintf(filename,"%d_%04d%02d%02dT%02d%02d%02d.wav", fileIDcounter, year(t), month(t), day(t), hour(t), minute(t), second(t));  //filename is YYYYMMDDTHHMMSS
+   sprintf(filename,"%lu_%04d%02d%02dT%02d%02d%02d.wav", fileIDcounter, year(t), month(t), day(t), hour(t), minute(t), second(t));  //filename is YYYYMMDDTHHMMSS
    
   #if USE_SDFS==1
     FsDateTime::callback = file_date_time;

@@ -159,9 +159,7 @@ void makeDataPacket(){
   
   // 31 Bytes:   dateTime,duration,lat,long
   dataPacket = "";
-  #ifdef SWARM_MODEM
-    dataPacket = "$TD \"";
-  #endif
+  if(modemType==SWARM) dataPacket = "$TD \"";
   dataPacket = "{t:";
   dataPacket += packetTime;
   dataPacket += ",i:",
@@ -184,7 +182,7 @@ void makeDataPacket(){
       spectrumLevel = spectrumLevel - hydroCalLeft - gainDb;
       iSpectrumLevel = (int) spectrumLevel;
       dataPacket += iSpectrumLevel;
-      dataPacket += ",";
+      if (i<NBANDS-1) dataPacket += ",";
    }
 
   dataPacket += "],v:";
@@ -195,8 +193,17 @@ void makeDataPacket(){
 
   // OPTIONAL CORAL PACKET
   if (coralProcessing){
-    dataPacket += String(coralPayload);
-    dataPacket.trim(); // remove /n
+    String tempCoral = String(coralPayload);
+    // make sure coral packet is not too large
+    if(dataPacket.length() + tempCoral.length() < 188){
+      dataPacket += tempCoral;
+      dataPacket.trim(); // remove /n
+    }
+    else{
+      dataPacket+="{c:";
+      dataPacket+=fileIDcounter;
+      dataPacket+=",sE:ov";
+    }
   }
 
   // ADD CHECKSUM
@@ -206,13 +213,11 @@ void makeDataPacket(){
   if(checksum<17) dataPacket += "0";
   dataPacket += String(checksum, HEX);
 
-  if(dataPacket.length() > 192){
-    if(printDiags){
-      Serial.print("Data packet too long ");
-      Serial.println(dataPacket.length());
-    }
-  }
+  if(printDiags){
+   Serial.print("length:");
+   Serial.println(dataPacket.length());
    Serial.println(dataPacket);
+  }
 }
 
 int sendDataPacket(){
