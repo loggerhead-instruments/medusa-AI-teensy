@@ -119,12 +119,21 @@ int ProcCmd(char *pCmd)
         break;
       }
 
+      // send satellite message: 0=no 1=yes
+      case ('S' + ('S'<<8)):
+      {
+        sscanf(&pCmd[3],"%d",&lv1);
+        if((lv1>=0) & (lv1<=1)) sendSatellite = lv1;
+        break;
+      }
+      
       case ('S' + ('G'<<8)):
       {
         sscanf(&pCmd[3],"%d",&lv1);
         gainSetting = lv1;
         break;
       } 
+
 
 
     // 0 is 8 kHz; 1 is 16 kHz; 2 is 32 kHz; 3 is 44.1 kHz; 4 is 48 kHz; 5 is 96 kHz;

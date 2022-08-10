@@ -413,9 +413,9 @@ void setup() {
   display.println("Loggerhead");
   display.display();
 
-  // Check if runMode = 0 for Pi dev
+  // Check if runMode = 0 for Coral dev
   if (runMode == 0){
-    digitalWrite(SD_POW, LOW); // switch off power to microSD (Pi will use SD mode, so card needs to reset)
+    digitalWrite(SD_POW, LOW); // switch off power to microSD (Coral will use SD mode, so card needs to reset)
     digitalWrite(SD_SWITCH, SD_CORAL); // switch control to Pi
     digitalWrite(POW_5V, HIGH); // power on Pi
     delay(1000);
@@ -696,7 +696,7 @@ void loop() {
         display.println("Booting");
         display.display();
         digitalWrite(SD_SWITCH, SD_CORAL); // switch control to Coral
-        digitalWrite(SD_POW, LOW); // switch off power to microSD (Pi will use SD mode, so card needs to reset)
+        digitalWrite(SD_POW, LOW); // switch off power to microSD (Coral will use SD mode, so card needs to reset)
         delay(1000);
         digitalWrite(SD_POW, HIGH); // power on microSD
         delay(100);
@@ -745,8 +745,8 @@ void loop() {
           resetWdt();
         }while((coralStatus>500) & (t - startCoralTime < coralTimeout)  & (coralTimedOut == 0));
         delay(1000);  // make sure it is shut down
-        digitalWrite(POW_5V, LOW); // power off Pi   
-        digitalWrite(SD_POW, LOW); // switch off power to microSD (Pi will use SD mode, so card needs to reset)
+        digitalWrite(POW_5V, LOW); // power off Coral
+        digitalWrite(SD_POW, LOW); // switch off power to microSD
         digitalWrite(SD_SWITCH, SD_TEENSY); // switch control to Teensy
         delay(1000);
         digitalWrite(SD_POW, HIGH); // power on microSD
@@ -809,7 +809,8 @@ void loop() {
 
     if(modemType==SWARM){
       pollTile(); // get updated RSSI
-      
+      makeDataPacket();
+      if(sendSatellite) sendDataPacket();
     }
     
       resetSignals();
