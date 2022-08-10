@@ -12,7 +12,7 @@ Adopt modified JSON with reserved short one character names. These names have a 
 
 Each message ends with a NEMA checksum (e.g. *67) to ensure data integrity
 
-Teensy will feed whatever string is stored by Coral in the detections.txt file into the satellite message. This will allow a user to change the Coral processing and us to create a web system to process these messages.
+Teensy will feed whatever string is stored by Coral in the detections.txt file into the satellite message. This will allow a user to change the Coral processing. The message format is designed to allow cloud processing of custom messages.
 
 Teensy will deal with message packing to fit inside of message limits. A message may contain one or more JSON blocks separated by {braces}.
 
@@ -28,12 +28,14 @@ d: audio duration in s
 a: lat
 o: lon
 b: band level sound
+v: voltage (transmitted as int voltage * 10)
 ```
 
 ```
 Packet from Coral
 c: file ID on message from Coral (this will match a file ID on message from Teensy)
 w: number of whistles
+sE: error string added by Teensy if payload too long
 ```
 
 example message assembled by Teensy that includes one Coral packet:
@@ -54,3 +56,5 @@ e.g. for Right whale count the user could implement a detector on the Coral and 
 ```
 {c:5B,iRW:5}
 ```
+
+The maximum Coral payload including formatting characters is 50 bytes, unless the Teensy payload is modified to be smaller. The Coral payload will not be added to the message if it is too long.
