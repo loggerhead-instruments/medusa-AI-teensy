@@ -19,16 +19,19 @@ JSON strings will NOT be enclosed with “quotes”
 
 
 ### Reserved Names
+```
 Packet from Teensy
 t: UNIX time stamp
 i: file ID on message from Teensy
 a: lat
 o: lon
 b: band level sound
-
+```
 ### Packet from Coral
+```
 c: file ID on message from Coral (this will match a file ID on message from Teensy)
 w: number of whistles
+```
 
 example:
 ```
