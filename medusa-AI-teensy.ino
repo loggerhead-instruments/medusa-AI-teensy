@@ -12,7 +12,7 @@
 // To Do:
 // - sleep Tile
 // - add internal temperature support
-// - check can read detections with exFat
+// - check Coral and Teensy can use exFat
 // - check failure scenarios
 // -     coral doesn't boot
 // -     sd doesn't connect
@@ -688,9 +688,9 @@ void loop() {
       resetWdt();
       if(introPeriod) displayOn();
       digitalWrite(gpsEnable, HIGH); // turn on so GPS can get fix while processing data and recording motion
-      //
+      // ****************************************************************************************************
       // Process audio with Coral
-      //
+      //*****************************************************************************************************
       if (coralProcessing){
         cDisplay();
         display.println("Booting");
@@ -731,7 +731,7 @@ void loop() {
           }
           display.display();
         }
-        
+
         // wait for Coral to process and power down
         // values will be <200 when Coral off
         startCoralTime = getTeensy3Time();
@@ -744,7 +744,7 @@ void loop() {
           t = getTeensy3Time();
           resetWdt();
         }while((coralStatus>500) & (t - startCoralTime < coralTimeout)  & (coralTimedOut == 0));
-        delay(1000);  // make sure it is shut down
+        if(coralTimedOut==0) delay(10000);  // make sure it is shut down
         digitalWrite(POW_5V, LOW); // power off Coral
         digitalWrite(SD_POW, LOW); // switch off power to microSD
         digitalWrite(SD_SWITCH, SD_TEENSY); // switch control to Teensy
@@ -849,7 +849,10 @@ void loop() {
           
           // Waking up
           
-         if(printDiags>0) printTime(getTeensy3Time());
+         if(printDiags>0) {
+          Serial.begin(baud);
+          printTime(getTeensy3Time());
+         }
           digitalWrite(hydroPowPin, HIGH); // hydrophone on 
           delay(100);
           AudioInit(isf);
