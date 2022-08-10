@@ -160,7 +160,7 @@ void makeDataPacket(){
   // 31 Bytes:   dateTime,duration,lat,long
   dataPacket = "";
   if(modemType==SWARM) dataPacket = "$TD \"";
-  dataPacket = "{t:";
+  dataPacket += "{t:";
   dataPacket += packetTime;
   dataPacket += ",i:",
   dataPacket += fileIDcounter;
@@ -202,12 +202,12 @@ void makeDataPacket(){
     else{
       dataPacket+="{c:";
       dataPacket+=fileIDcounter;
-      dataPacket+=",sE:ov";
+      dataPacket+=",sE:ov}";
     }
   }
 
   // ADD CHECKSUM
-  dataPacket += "\"";
+  if(modemType==SWARM) dataPacket += "\"";
   uint8_t checksum = nmeaChecksum(&dataPacket[0], dataPacket.length());
   dataPacket += "*";
   if(checksum<17) dataPacket += "0";
