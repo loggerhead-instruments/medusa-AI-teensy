@@ -10,6 +10,9 @@
 // Compile 96 MHz Fastest
 
 // To Do:
+
+// - ASCII data packet structure
+//    - process more than one Coral packet
 // - sleep Tile
 // - add internal temperature support
 // - check Coral and Teensy can use exFat
@@ -122,15 +125,12 @@ int gainSetting = 4; // SG in script file
 #define TILE_EN 4 // switches on power to Tile
 #define RECV_PIN 6
 #define gpsEnable 5
-
 #define audioPowEnable 8
 #define POW_5V 15
 #define SD_POW 16
 #define SD_SWITCH 17
 #define CORAL_STATUS A10
 #define CORAL_STATUS2 A11
-
-
 #define SD_TEENSY LOW
 #define SD_CORAL HIGH
 
@@ -139,7 +139,6 @@ AltSoftSerial gpsSerial;  // RX 20; Tx: 21
 IridiumSBD modem(Serial1, iridiumSleep);
 int sigStrength;
 uint8_t rxBuffer[100];
-
 
 #define CPU_RESTART_ADDR (uint32_t *)0xE000ED0C
 #define CPU_RESTART_VAL 0x5FA0004
@@ -153,9 +152,7 @@ Adafruit_SSD1306 display(OLED_RESET);
 #define displayLine4 27
 #define BOTTOM 55
 
-
 static uint8_t myID[8];
-
 unsigned long baud = 115200;
 
 #ifdef TWOCHAN
@@ -255,7 +252,8 @@ long nbufs_per_file;
 boolean settingsChanged = 0;
 
 long file_count;
-char filename[25];
+char filename[40];
+uint32_t fileIDcounter=0; 
 char dirname[8];
 int folderMonth;
 //SnoozeBlock snooze_config;
@@ -953,8 +951,9 @@ void FileInit()
 {
    t = getTeensy3Time();
    // open file 
-   sprintf(filename,"%04d%02d%02dT%02d%02d%02d.wav", year(t), month(t), day(t), hour(t), minute(t), second(t));  //filename is YYYYMMDDTHHMMSS
-
+   fileIDcounter++;
+   sprintf(filename,"%d_%04d%02d%02dT%02d%02d%02d.wav", fileIDcounter, year(t), month(t), day(t), hour(t), minute(t), second(t));  //filename is YYYYMMDDTHHMMSS
+   
   #if USE_SDFS==1
     FsDateTime::callback = file_date_time;
   #else

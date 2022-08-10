@@ -147,27 +147,33 @@ int makeSendBinaryDataPacket(){
 
 
 
-// dataPacket should look like this for AWS
-//  String data = '1536368460;300;26.4321;-82.3476;w:12;0:75;1:65;2:52;3:48;z:3.2'
-//                  UNIX time;duration (s);lat;lon;
+// dataPacket info
+// https://github.com/loggerhead-instruments/medusa-AI-teensy/blob/main/README.md
 void makeDataPacket(){
   float spectrumLevel;
   int iSpectrumLevel;
   time_t packetTime = stopTime - rec_dur;
   //char dateTime[50];
   //sprintf(dateTime,"%04d%02d%02dT%02d%02d%02d", year(packetTime), month(packetTime), day(packetTime), hour(packetTime), minute(packetTime), second(packetTime));
+
   
   // 31 Bytes:   dateTime,duration,lat,long
   dataPacket = "";
+  #ifdef SWARM_MODEM
+    dataPacket = "$TD \"";
+  #endif
+  dataPacket = "{t:";
   dataPacket += packetTime;
-  dataPacket += ";";
+  dataPacket += ",i:",
+  dataPacket += fileIDcounter;
+  dataPacket += ",d:";
   dataPacket += rec_dur;
-  dataPacket += ";";
+  dataPacket += ",a:";
   dataPacket += String(latitude, 4);
-  dataPacket += ";";
+  dataPacket += ",o:";
   dataPacket += String(longitude, 4);
 
-  dataPacket += ";";
+  dataPacket += ",b:[";
   for (int i=0; i<NBANDS; i++){
       if(meanBand[i][0]>0.000001){
         spectrumLevel = 20*log10(meanBand[i][0] / fftCount) - (10 * log10(binwidth)); 
@@ -177,42 +183,34 @@ void makeDataPacket(){
        }
       spectrumLevel = spectrumLevel - hydroCalLeft - gainDb;
       iSpectrumLevel = (int) spectrumLevel;
-      dataPacket += i;
-      dataPacket += ":";
       dataPacket += iSpectrumLevel;
-      if(NCHAN==2) dataPacket+= ",";
-      else
-        dataPacket += ";";
-      
-      if(NCHAN==2){
-       if(meanBand[i][1]>0.000001){
-            spectrumLevel = 20*log10(meanBand[i][1] / fftCount) - (10 * log10(binwidth)); 
-          }
-          else{
-            spectrumLevel = -96 - (10 * log10(binwidth));
-           }
-          spectrumLevel = spectrumLevel - hydroCalRight - gainDb;
-          iSpectrumLevel = (int) spectrumLevel;
-          dataPacket += iSpectrumLevel;
-          dataPacket += ";";
-       }
+      dataPacket += ",";
    }
 
-  dataPacket += "v:";
+  dataPacket += "],v:";
   dataPacket += String((int) (voltage * 10));
+  dataPacket += "}";
 
+  // END OF TEENSY PACKET
+
+  // OPTIONAL CORAL PACKET
   if (coralProcessing){
-    dataPacket += ";";
     dataPacket += String(coralPayload);
     dataPacket.trim(); // remove /n
   }
-  if(modemType==SWARM){
-    dataPacket += "\"";
-    uint8_t checksum = nmeaChecksum(&dataPacket[0], dataPacket.length());
-    dataPacket += "*";
-    if(checksum<17) dataPacket += "0";
-    dataPacket += String(checksum, HEX);
-    Serial.print("Swarm ");
+
+  // ADD CHECKSUM
+  dataPacket += "\"";
+  uint8_t checksum = nmeaChecksum(&dataPacket[0], dataPacket.length());
+  dataPacket += "*";
+  if(checksum<17) dataPacket += "0";
+  dataPacket += String(checksum, HEX);
+
+  if(dataPacket.length() > 192){
+    if(printDiags){
+      Serial.print("Data packet too long ");
+      Serial.println(dataPacket.length());
+    }
   }
    Serial.println(dataPacket);
 }
