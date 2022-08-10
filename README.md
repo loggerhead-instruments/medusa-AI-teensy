@@ -24,6 +24,7 @@ JSON strings will NOT be enclosed with “quotes”
 Packet from Teensy
 t: UNIX time stamp
 i: file ID on message from Teensy
+d: audio duration in s
 a: lat
 o: lon
 b: band level sound
