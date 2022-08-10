@@ -28,12 +28,14 @@ d: audio duration in s
 a: lat
 o: lon
 b: band level sound
+v: voltage (transmitted as int voltage * 10)
 ```
 
 ```
 Packet from Coral
 c: file ID on message from Coral (this will match a file ID on message from Teensy)
 w: number of whistles
+sE: error string added by Teensy if payload too long
 ```
 
 example message assembled by Teensy that includes one Coral packet:
