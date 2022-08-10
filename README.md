@@ -10,7 +10,7 @@ Iridium via Rockblock charges for every 50 characters. Max message 320 Bytes
 ### Message Format
 Adopt modified JSON with reserved short one character names. These names have a known data type associated with them (e.g. string or number).
 
-Each message ends with a NEMA checksum (e.g. *67) to ensure data integrity
+Each Swarm message ends with a NEMA checksum (e.g. *67) that is removed by the Swarm system.
 
 Teensy will feed whatever string is stored by Coral in the detections.txt file into the satellite message. This will allow a user to change the Coral processing. The message format is designed to allow cloud processing of custom messages.
 
