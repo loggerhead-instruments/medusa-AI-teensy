@@ -40,6 +40,7 @@ example message assembled by Teensy that includes one Coral packet:
 {t:1549317960,i:3A,a:26.3425,o:-82.3456,b:[72,72,72,43,54,34,98]}{c:3A,w:3}*67
 ```
 
+### Custom User Coral Messages
 Users can use 2 or 3 character fields to pack any data they want.
 
 lowercase i = number
