@@ -43,11 +43,13 @@ example message assembled by Teensy that includes one Coral packet:
 ### Custom User Coral Messages
 Users can use 2 or 3 character fields to pack any data they want.
 
+The message should start with a data type specifier indicating whether it is text or a number.
+
 lowercase i = number
 
 lowercase s = string
 
 e.g. for Right whale count the user could implement a detector on the Coral and output the results like:
 ```
-{c:5B,RWi:5}
+{c:5B,iRW:5}
 ```
