@@ -56,3 +56,5 @@ e.g. for Right whale count the user could implement a detector on the Coral and 
 ```
 {c:5B,iRW:5}
 ```
+
+The maximum Coral payload including formatting characters is 50 bytes, unless the Teensy payload is modified to be smaller.
