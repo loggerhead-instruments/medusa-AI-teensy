@@ -27,8 +27,9 @@ a: lat
 o: lon
 b: band level sound
 ```
-### Packet from Coral
+
 ```
+Packet from Coral
 c: file ID on message from Coral (this will match a file ID on message from Teensy)
 w: number of whistles
 ```
