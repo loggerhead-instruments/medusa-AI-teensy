@@ -34,7 +34,7 @@ c: file ID on message from Coral (this will match a file ID on message from Teen
 w: number of whistles
 ```
 
-example:
+example message assembled by Teensy that includes one Coral packet:
 ```
 {t:1549317960,i:3A,a:26.3425,o:-82.3456,b:[72,72,72,43,54,34,98]}{c:3A,w:3}*67
 ```
