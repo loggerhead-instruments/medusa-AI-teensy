@@ -41,7 +41,12 @@ example message assembled by Teensy that includes one Coral packet:
 ```
 
 Users can use 2 or 3 character fields to pack any data they want.
+
 lowercase i = number
+
 lowercase s = string
+
 e.g. for Right whale count the user could implement a detector on the Coral and output the results like:
+```
 {c:5B,RWi:5}
+```
