@@ -80,6 +80,7 @@ int ProcCmd(char *pCmd)
 
       // Run Mode
       // default runMode = 1; // 0 = dev mode (power on Coral and give microSD access); 1 = deployment mode
+      case ('R' + ('M'<<8)):
       {
         sscanf(&pCmd[3],"%d",&lv1);
         if((lv1>=0) & (lv1<=1)) runMode = lv1;

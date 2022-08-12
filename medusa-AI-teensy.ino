@@ -6,19 +6,22 @@
 // David Mann
 
 // There must be an interval between files to work properly
+// microSD card must be formatted as FAT32 to work with Coral
 // # channels and FFT size are #define, so will have different hex files for differen setups
 // Compile 96 MHz Fastest
 
 // To Do:
 // - sleep Tile
 // - add internal temperature support
-// - check Coral and Teensy can use exFat
-// - check failure scenarios
-// -     coral doesn't boot
-// -     sd doesn't connect
 // - test GPS PPS
 // - test 2 channel record
-// - EEPROM; display settings on boot
+// - possible to auto-identify the modem type?
+
+// - EEPROM stores audio info
+//  - sample rate
+//  - gain
+//  - record duration
+//  - sleep interval
 
 // Power Consumption
 // Startup: 200 mA
