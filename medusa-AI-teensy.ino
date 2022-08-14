@@ -408,8 +408,30 @@ void setup() {
   cDisplay();
   display.println("Loggerhead");
   display.display();
+  
+  // Initialize the SD card
+  SPI.setMOSI(7);
+  SPI.setSCK(14);
+  if (!(sd.begin(10))) {
+    sdGood = 0;
+    Serial.println("Unable to access the SD card");
+    cDisplay();
+    for (int flashMe=0; flashMe<50; flashMe++){
+      display.println("");
+      display.println("SD error");
+      display.display();
+      delay(400);
+      cDisplay();
+      display.display();
+      delay(400);
+    }
+    delay(400);    
+  }
+  readEEPROM();  // read settings stored in EEPROM
+  if(sdGood) LoadScript();
+  writeEEPROM(); // update settings changed from script
 
-  // Check if runMode = 0 for Coral dev
+   // Check if runMode = 0 for Coral dev
   if (runMode == 0){
     digitalWrite(SD_POW, LOW); // switch off power to microSD (Coral will use SD mode, so card needs to reset)
     digitalWrite(SD_SWITCH, SD_CORAL); // switch control to Pi
@@ -432,30 +454,7 @@ void setup() {
       display.display();
       delay(500);
     }
-    
   }
-
-  // Initialize the SD card
-  SPI.setMOSI(7);
-  SPI.setSCK(14);
-  if (!(sd.begin(10))) {
-    sdGood = 0;
-    Serial.println("Unable to access the SD card");
-    cDisplay();
-    for (int flashMe=0; flashMe<50; flashMe++){
-      display.println("");
-      display.println("SD error");
-      display.display();
-      delay(400);
-      cDisplay();
-      display.display();
-      delay(400);
-    }
-    delay(400);    
-  }
-  readEEPROM();  // read settings stored in EEPROM
-  if(sdGood) LoadScript();
-  writeEEPROM(); // update settings changed from script
 
   binwidth = audio_srate / fftPoints; //256 point FFT; = 172.3 Hz for 44.1kHz
   fftDurationMs = 1000.0 / binwidth;
