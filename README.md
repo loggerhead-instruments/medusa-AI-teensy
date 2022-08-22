@@ -29,6 +29,9 @@ a: lat
 o: lon
 b: band level sound
 v: voltage (transmitted as int voltage * 10)
+t: temperature (internal * 10) C
+p: pressure internal hPa
+h: humidity %rH
 ```
 
 ```
@@ -40,7 +43,7 @@ sE: error string added by Teensy if payload too long
 
 example message assembled by Teensy that includes one Coral packet:
 ```
-{t:1549317960,i:3A,a:26.3425,o:-82.3456,b:[72,72,72,43,54,34,98]}{c:3A,w:3}*67
+{t:1549317960,i:3A,a:26.3425,o:-82.3456,b:[72,72,72,43,54,34,98],v:39,t:256,p:1014,h:46}{c:3A,w:3}*67
 ```
 
 ### Custom User Coral Messages
