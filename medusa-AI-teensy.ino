@@ -69,6 +69,12 @@
 #include "control_sgtl5000.h"
 #include <analyze_fft1024.h>
 #include <analyze_fft256.h>
+
+// Adafruit temperature, pressure, humidity
+#include <Adafruit_MS8607.h>
+#include <Adafruit_Sensor.h>
+Adafruit_MS8607 ms8607;
+sensors_event_t temp, pressure, humidity;
 // 
 // Dev settings
 //
@@ -402,7 +408,7 @@ void setup() {
         delay(1000);
       }
    }
-  
+
   readVoltage();
   displayOn();
   cDisplay();
@@ -431,6 +437,38 @@ void setup() {
   if(sdGood) LoadScript();
   writeEEPROM(); // update settings changed from script
 
+  // Try to initialize MS8607 Pressure, Temp, Humidity sensor
+  if (!ms8607.begin()) {
+    Serial.println("Failed to find MS8607 chip");
+  }
+
+  ms8607.setHumidityResolution(MS8607_HUMIDITY_RESOLUTION_OSR_8b);
+  Serial.print("Humidity resolution set to ");
+  switch (ms8607.getHumidityResolution()){
+    case MS8607_HUMIDITY_RESOLUTION_OSR_12b: Serial.println("12-bit"); break;
+    case MS8607_HUMIDITY_RESOLUTION_OSR_11b: Serial.println("11-bit"); break;
+    case MS8607_HUMIDITY_RESOLUTION_OSR_10b: Serial.println("10-bit"); break;
+    case MS8607_HUMIDITY_RESOLUTION_OSR_8b: Serial.println("8-bit"); break;
+  }
+  // ms8607.setPressureResolution(MS8607_PRESSURE_RESOLUTION_OSR_4096);
+  Serial.print("Pressure and Temperature resolution set to ");
+  switch (ms8607.getPressureResolution()){
+    case MS8607_PRESSURE_RESOLUTION_OSR_256: Serial.println("256"); break;
+    case MS8607_PRESSURE_RESOLUTION_OSR_512: Serial.println("512"); break;
+    case MS8607_PRESSURE_RESOLUTION_OSR_1024: Serial.println("1024"); break;
+    case MS8607_PRESSURE_RESOLUTION_OSR_2048: Serial.println("2048"); break;
+    case MS8607_PRESSURE_RESOLUTION_OSR_4096: Serial.println("4096"); break;
+    case MS8607_PRESSURE_RESOLUTION_OSR_8192: Serial.println("8192"); break;
+  }
+
+    
+    ms8607.getEvent(&pressure, &temp, &humidity);
+    Serial.print("Temperature: ");Serial.print(temp.temperature); Serial.println(" degrees C");
+    Serial.print("Pressure: ");Serial.print(pressure.pressure); Serial.println(" hPa");
+    Serial.print("Humidity: ");Serial.print(humidity.relative_humidity); Serial.println(" %rH");
+    Serial.println("");
+  
+
    // Check if runMode = 0 for Coral dev
   if (runMode == 0){
     digitalWrite(SD_POW, LOW); // switch off power to microSD (Coral will use SD mode, so card needs to reset)
@@ -445,6 +483,7 @@ void setup() {
       resetWdt();
       int coralStatus = analogRead(CORAL_STATUS);
       // int coralStatus2 = analogRead(CORAL_STATUS2); // not used for Coral
+      // read temperature, humidity
       cDisplay();
       display.println("Dev Mode");
       display.println();
@@ -731,7 +770,7 @@ void loop() {
         // values will be <200 when Coral off
         startCoralTime = getTeensy3Time();
         t = startCoralTime;
-        Serial.println("Wait for PI to power down");
+        Serial.println("Wait for Coral to power down");
         do{
           coralStatus = analogRead(CORAL_STATUS);
           delay(1000);
@@ -739,7 +778,7 @@ void loop() {
           t = getTeensy3Time();
           resetWdt();
         }while((coralStatus>500) & (t - startCoralTime < coralTimeout)  & (coralTimedOut == 0));
-        if(coralTimedOut==0) delay(12000);  // make sure it is shut down
+        delay(1000);  // give time to shut down
         digitalWrite(POW_5V, LOW); // power off Coral
         digitalWrite(SD_POW, LOW); // switch off power to microSD
         digitalWrite(SD_SWITCH, SD_TEENSY); // switch control to Teensy
@@ -783,6 +822,10 @@ void loop() {
       }
       digitalWrite(gpsEnable, LOW); // turn off once have good GPS
 
+
+    // Measure internal pressure temperature and humidity 
+    ms8607.getEvent(&pressure, &temp, &humidity);
+     
     // Satellite Message
     if(modemType==IRIDIUM){
       if(sendSatellite){

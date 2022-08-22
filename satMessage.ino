@@ -185,8 +185,22 @@ void makeDataPacket(){
       if (i<NBANDS-1) dataPacket += ",";
    }
 
+  // voltage
   dataPacket += "],v:";
   dataPacket += String((int) (voltage * 10));
+
+  // internal temperature
+  dataPacket += ",t:";
+  dataPacket += String((int) (temp.temperature * 10));
+
+  // internal pressure
+  dataPacket += ",p:";
+  dataPacket += String((int) (pressure.pressure));
+
+  // internal humidity
+  dataPacket += ",h:";
+  dataPacket += String((int) (humidity.relative_humidity));
+  
   dataPacket += "}";
 
   // END OF TEENSY PACKET
