@@ -57,7 +57,7 @@ lowercase s = string
 
 e.g. for Right whale count the user could implement a detector on the Coral and output the results like:
 ```
-{c:5B,iRW:5}
+{C:5B,iRW:5}
 ```
 
 The maximum Coral payload including formatting characters is 50 bytes, unless the Teensy payload is modified to be smaller. The Coral payload will not be added to the message if it is too long.
