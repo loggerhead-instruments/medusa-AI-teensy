@@ -190,7 +190,7 @@ void makeDataPacket(){
   dataPacket += String((int) (voltage * 10));
 
   // internal temperature
-  dataPacket += ",t:";
+  dataPacket += ",c:";
   dataPacket += String((int) (temp.temperature * 10));
 
   // internal pressure
@@ -214,7 +214,7 @@ void makeDataPacket(){
       dataPacket.trim(); // remove /n
     }
     else{
-      dataPacket+="{c:";
+      dataPacket+="{C:";
       dataPacket+=fileIDcounter;
       dataPacket+=",sE:ov}";
     }
