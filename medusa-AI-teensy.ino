@@ -12,12 +12,13 @@
 
 // To Do:
 // - sleep Tile
-// - add internal temperature support
 // - test GPS PPS
 // - test 2 channel record
-// - possible to auto-identify the modem type?
+// - auto-identify the modem type
+// - if can't open file after cycling power, try to reformat SD card. If that fails, stop using sd card.
+// - monitor Coral 3.3V pin to determine when it powered off
 
-// - EEPROM stores audio info
+// - EEPROM stores audio info. Other settings must be on the SD card setup.txt file
 //  - sample rate
 //  - gain
 //  - record duration
@@ -50,7 +51,7 @@
 // Commands must have a carriage return \r, not a line feed
 // "AT\r"
 
-#define codeVersion 20220810
+#define codeVersion 20220825
 #define MQ 100 // to be used with LHI record queue (modified local version)
 
 #include "input_i2s.h"
@@ -123,7 +124,7 @@ int gainSetting = 4; // SG in script file
 // Pin Assignments
 #define hydroPowPin 8
 #define vSense A14  // moved to Pin 21 for X1
-#define iridiumAv 2 // High when Iridium network available 
+// #define iridiumAv 2 // High when Iridium network available 
 #define iridiumRi 3 // Ring Indicator: active low; inactive high
 #define iridiumSleep 4 // Sleep active low
 #define TILE_EN 4 // switches on power to Tile
@@ -137,6 +138,7 @@ int gainSetting = 4; // SG in script file
 #define CORAL_STATUS2 A11
 #define SD_TEENSY LOW
 #define SD_CORAL HIGH
+#define CORAL_SWITCH 2
 
 AltSoftSerial gpsSerial;  // RX 20; Tx: 21
 
@@ -373,7 +375,9 @@ void setup() {
   pinMode(hydroPowPin, OUTPUT);
   pinMode(vSense, INPUT);
   analogReference(DEFAULT); 
-  pinMode(iridiumAv, INPUT);
+  pinMode(CORAL_SWITCH, OUTPUT);
+  digitalWrite(CORAL_SWITCH, HIGH); // pull-down switch to trigger
+  //pinMode(iridiumAv, INPUT);
   pinMode(iridiumRi, INPUT);
   pinMode(iridiumSleep, OUTPUT);
   digitalWrite(iridiumSleep, LOW); // HIGH = enabled; LOW = sleeping
@@ -472,9 +476,12 @@ void setup() {
    // Check if runMode = 0 for Coral dev
   if (runMode == 0){
     digitalWrite(SD_POW, LOW); // switch off power to microSD (Coral will use SD mode, so card needs to reset)
-    digitalWrite(SD_SWITCH, SD_CORAL); // switch control to Pi
-    digitalWrite(POW_5V, HIGH); // power on Pi
-    delay(1000);
+    digitalWrite(SD_SWITCH, SD_CORAL); // switch control to Coral
+    digitalWrite(POW_5V, HIGH); // power on Coral
+    delay(100);
+    coralSwitch();
+    // to do--verify that Coral turned on by monitoring 3.3V pin
+    
     digitalWrite(SD_POW, HIGH); // power on microSD
     display.println("Coral Dev Mode");
     display.display();
@@ -735,7 +742,10 @@ void loop() {
         digitalWrite(SD_POW, HIGH); // power on microSD
         delay(100);
         digitalWrite(POW_5V, HIGH); // power on Coral
-        delay(5000);
+        delay(1000);
+        coralSwitch();
+
+        // To Do: Make sure Coral powers on
                 
         // wait for Coral to boot
         // CORAL_STATUS goes to 1000 when Python program starts
@@ -757,6 +767,7 @@ void loop() {
           displayOn();
           cDisplay();
           display.println("Processing");
+          display.display();
           if(coralTimedOut) {
             display.println("Coral timeout");
             if(printDiags){
@@ -778,7 +789,11 @@ void loop() {
           t = getTeensy3Time();
           resetWdt();
         }while((coralStatus>500) & (t - startCoralTime < coralTimeout)  & (coralTimedOut == 0));
-        delay(1000);  // give time to shut down
+        delay(5000);  // give time to shut down
+        // to do: monitor 3.3V on Coral to wait
+        // if 3.3V does not go down in 5 s, try pressing button, then cut power to Coral
+
+        
         digitalWrite(POW_5V, LOW); // power off Coral
         digitalWrite(SD_POW, LOW); // switch off power to microSD
         digitalWrite(SD_SWITCH, SD_TEENSY); // switch control to Teensy
@@ -1008,25 +1023,18 @@ void FileInit()
       for(int n=0; n<8; n++){
         file.print(myID[n]);
       }
-
       file.print(',');
       file.print(codeVersion);
-      
       file.print(',');
       file.print(gainDb); 
-      
       file.print(',');
       file.print(voltage); 
-      
       file.print(',');
       file.print(latitude, 4);
-
       file.print(',');
       file.print(longitude, 4);
-
       file.print(',');
       file.print(goodGPS);
-      
       file.println();
       file.close();
    }
@@ -1034,13 +1042,10 @@ void FileInit()
     if(printDiags) Serial.print("Log open fail.");
    }
     
-   while (!file.open(filename, O_WRITE | O_CREAT | O_EXCL)){
-    file_count += 1;
-    sprintf(filename,"F%06ld.wav",file_count); //if can't open just use count
-    sd.chdir(dirname);
-    file.open(filename, O_WRITE | O_CREAT | O_EXCL);
-    Serial.println(filename);
+   while (!file.open(filename, O_WRITE | O_CREAT)){
+    Serial.println('Open fail');
     delay(10);
+    file_count++;
     // try to cycle power and reinit SD
     if(file_count==4){
       digitalWrite(SD_POW, LOW);
@@ -1048,6 +1053,10 @@ void FileInit()
       digitalWrite(SD_POW, HIGH);
       delay(1000);
       sd.begin(10);
+    }
+    if(file_count==10){
+      // To Do: try re-formatting sd card
+      
     }
     if(file_count>20) {
       sdGood = 0; // give up on trying to open file for writing
@@ -1209,6 +1218,12 @@ void setupWdt(){
       WDOG_STCTRLH_WDOGEN | WDOG_STCTRLH_WAITEN |
       WDOG_STCTRLH_STOPEN | WDOG_STCTRLH_CLKSRC;
   interrupts();
+}
+
+void coralSwitch(){
+    digitalWrite(CORAL_SWITCH, LOW); //simulate power button press
+    delay(1500);
+    digitalWrite(CORAL_SWITCH, HIGH);  
 }
 
 void resetWdt(){

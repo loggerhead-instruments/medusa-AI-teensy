@@ -157,7 +157,7 @@ void makeDataPacket(){
   //sprintf(dateTime,"%04d%02d%02dT%02d%02d%02d", year(packetTime), month(packetTime), day(packetTime), hour(packetTime), minute(packetTime), second(packetTime));
 
   
-  // 31 Bytes:   dateTime,duration,lat,long
+  // ASCII Packet
   dataPacket = "";
   if(modemType==SWARM) dataPacket = "$TD \"";
   dataPacket += "{t:";
