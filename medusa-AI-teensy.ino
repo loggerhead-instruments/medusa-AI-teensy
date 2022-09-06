@@ -125,7 +125,7 @@ int gainSetting = 4; // SG in script file
 #define hydroPowPin 8
 #define vSense A14  // moved to Pin 21 for X1
 // #define iridiumAv 2 // High when Iridium network available 
-#define iridiumRi 3 // Ring Indicator: active low; inactive high
+// #define iridiumRi 3 // Ring Indicator: active low; inactive high; shared with stop button for microSD
 #define iridiumSleep 4 // Sleep active low
 #define TILE_EN 4 // switches on power to Tile
 #define RECV_PIN 6
@@ -139,6 +139,7 @@ int gainSetting = 4; // SG in script file
 #define SD_TEENSY LOW
 #define SD_CORAL HIGH
 #define CORAL_SWITCH 2
+#define STOP 3
 
 AltSoftSerial gpsSerial;  // RX 20; Tx: 21
 
@@ -377,8 +378,10 @@ void setup() {
   analogReference(DEFAULT); 
   pinMode(CORAL_SWITCH, OUTPUT);
   digitalWrite(CORAL_SWITCH, HIGH); // pull-down switch to trigger
+  pinMode(STOP, INPUT_PULLUP);
+  
   //pinMode(iridiumAv, INPUT);
-  pinMode(iridiumRi, INPUT);
+  //pinMode(iridiumRi, INPUT);
   pinMode(iridiumSleep, OUTPUT);
   digitalWrite(iridiumSleep, LOW); // HIGH = enabled; LOW = sleeping
   pinMode(gpsEnable, OUTPUT);
@@ -722,6 +725,22 @@ void loop() {
          noiseBandCalc();
     }
 
+    if(digitalRead(STOP)==0){
+      delay(100);
+      if(digitalRead(STOP)==0){
+        stopRecording();
+        cDisplay();
+        display.println("Safe to power off.");
+        display.display();
+        int stopCounter = 0;
+        while(stopCounter < 100){
+          resetWdt();
+          delay(1000);
+          stopCounter++;
+        }
+      }
+    }
+
     if(buf_count >= nbufs_per_file){       // time to stop?
       total_hour_recorded += (float) rec_dur / 3600.0;
       if(total_hour_recorded > 0.1) introPeriod = 0;  //LEDS on for first file
@@ -738,11 +757,10 @@ void loop() {
         display.display();
         digitalWrite(SD_SWITCH, SD_CORAL); // switch control to Coral
         digitalWrite(SD_POW, LOW); // switch off power to microSD (Coral will use SD mode, so card needs to reset)
+        delay(100);
+        digitalWrite(POW_5V, HIGH); // power to Coral
         delay(1000);
         digitalWrite(SD_POW, HIGH); // power on microSD
-        delay(100);
-        digitalWrite(POW_5V, HIGH); // power on Coral
-        delay(1000);
         coralSwitch();
 
         // To Do: Make sure Coral powers on
@@ -763,7 +781,7 @@ void loop() {
         }
         boolean coralTimedOut = 0;
         if (t - startCoralTime > coralTimeout) coralTimedOut = 1;
-        if(introPeriod){
+       // if(introPeriod){
           displayOn();
           cDisplay();
           display.println("Processing");
@@ -775,7 +793,9 @@ void loop() {
             }
           }
           display.display();
-        }
+       // }
+
+        resetWdt();
 
         // wait for Coral to process and power down
         // values will be <200 when Coral off
@@ -789,8 +809,12 @@ void loop() {
           t = getTeensy3Time();
           resetWdt();
         }while((coralStatus>500) & (t - startCoralTime < coralTimeout)  & (coralTimedOut == 0));
-        delay(5000);  // give time to shut down
+        cDisplay();
+        display.println("Coral done processing. Waiting 10 s.");
+        display.display();
+        delay(10000);  // give time to shut down
         // to do: monitor 3.3V on Coral to wait
+        
         // if 3.3V does not go down in 5 s, try pressing button, then cut power to Coral
 
         
@@ -808,6 +832,9 @@ void loop() {
           digitalWrite(SD_POW, HIGH);
           delay(1000);
           Serial.println("SD restart failed");
+          cDisplay();
+          display.println("Teensy SD restart failed");
+          display.display();
         }
         if(sdAttempts>=10) cardFailed = 1;
   
@@ -1043,7 +1070,7 @@ void FileInit()
    }
     
    while (!file.open(filename, O_WRITE | O_CREAT)){
-    Serial.println('Open fail');
+    Serial.println("Open fail");
     delay(10);
     file_count++;
     // try to cycle power and reinit SD
