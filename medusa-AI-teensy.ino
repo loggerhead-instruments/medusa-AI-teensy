@@ -729,6 +729,7 @@ void loop() {
       delay(100);
       if(digitalRead(STOP)==0){
         stopRecording();
+        displayOn();
         cDisplay();
         display.println("Safe to power off.");
         display.display();
@@ -738,6 +739,7 @@ void loop() {
           delay(1000);
           stopCounter++;
         }
+        resetFunc(); // reset if having powered off in 100s
       }
     }
 
